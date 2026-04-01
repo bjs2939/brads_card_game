@@ -30,6 +30,20 @@ function HomePage() {
         </button>
 
         <button
+          style={{ marginRight: "1rem" }}
+          onClick={() => {
+            smartLog("pushed new game vs computer button", {
+              componentName: "HomePage",
+            });
+
+            // placeholder for next step
+            setPlayerName("Brad");
+          }}
+        >
+          New Game VS. Computer Player
+        </button>
+
+        <button
           onClick={() => {
             smartLog("pushed join game button", {
               componentName: "HomePage",
@@ -43,3 +57,4 @@ function HomePage() {
   );
 }
 
+export default HomePage;

@@ -1,12 +1,16 @@
-//CardGameContext.tsx
-//C:\Users\brad330\Desktop\Brad's Work\Programs\Brads_Card_Game\src\CardGameContext.tsx
+// CardGameContext.tsx
+// C:\Users\bjs29\OneDrive\Desktop\Programs\brads_card_game\src\CardGameContext.tsx
 
 import React, { createContext, useContext, useState, ReactNode } from "react";
-import { smartLog } from "../src/smartLog";
+import { smartLog as log } from "./smart_log";
+
+type Screen = "home" | "game";
 
 type CardGameContextType = {
   playerName: string;
   setPlayerName: (name: string) => void;
+  screen: Screen;
+  setScreen: (screen: Screen) => void;
 };
 
 const CardGameContext = createContext<CardGameContextType | undefined>(undefined);
@@ -16,29 +20,40 @@ type CardGameProviderProps = {
 };
 
 function CardGameProvider({ children }: CardGameProviderProps) {
-  smartLog("context provider initialized");
+  log("context provider initialized");
 
   const [playerName, setPlayerNameState] = useState("");
+  const [screen, setScreenState] = useState<Screen>("home");
 
   function setPlayerName(name: string) {
-    smartLog("player name update requested with {name}");
+    log("player name update requested", { name });
 
     const previousName = playerName;
     setPlayerNameState(name);
 
-    smartLog(
-      "player name changed from {previousName} to {name}"
-    );
+    log("player name changed", { previousName, name });
+  }
+
+  function setScreen(newScreen: Screen) {
+    log("screen change requested", { newScreen });
+
+    const previousScreen = screen;
+    setScreenState(newScreen);
+
+    log("screen changed", { previousScreen, newScreen });
   }
 
   const contextValue: CardGameContextType = {
     playerName,
     setPlayerName,
+    screen,
+    setScreen,
   };
 
-  smartLog(
-    "context value prepared with playerName={playerName || 'empty'}"
-  );
+  log("context value prepared", {
+    playerName: playerName || "empty",
+    screen,
+  });
 
   return (
     <CardGameContext.Provider value={contextValue}>
@@ -51,15 +66,14 @@ function useCardGameContext() {
   const context = useContext(CardGameContext);
 
   if (!context) {
-    smartLog(
-      "context lookup failed, hook used outside provider"
-    );
+    log("context lookup failed, hook used outside provider");
     throw new Error("card game context missing provider");
   }
 
-  smartLog(
-    "context accessed with playerName={context.playerName || 'empty'}"
-  );
+  log("context accessed", {
+    playerName: context.playerName || "empty",
+    screen: context.screen,
+  });
 
   return context;
 }
