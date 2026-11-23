@@ -67,7 +67,7 @@ type Game = ReturnType<typeof dealSimpleGame> & {
   drawnCard?: Card;
   deckWarning?: 0 | 1 | 2 | 3 | 4 | 5 | 10;
   spyFlash?: Card;
-  attackAnimation?: { target: Card; side: Side; kind: "ranger" | "dragon" };
+  attackAnimation?: { attacker: Card; target: Card; side: Side; kind: "ranger" | "dragon" | "card" };
   jokerExplosion?: { turn: number; survived: boolean; attacker: Card };
   selected: number | null;
   selectedShield: Card | null;
@@ -655,10 +655,12 @@ function findComputerStack(game: Game, field: Field) {
   return bestField;
 }
 
-function makeAttackAnimation(attacker: Unit, target: Card, side: Side): Game["attackAnimation"] {
-  if (attacker.card.type !== "standard") return;
-  if (attacker.card.rank === "6") return { target, side, kind: "ranger" };
-  if (attacker.card.rank === "10") return { target, side, kind: "dragon" };
+function makeAttackAnimation(attacker: Unit, target: Card, side: Side, jokerBlast = false): Game["attackAnimation"] {
+  const card = attacker.card;
+  const kind = card.type === "standard" && card.rank === "6" ? "ranger"
+    : card.type === "standard" && card.rank === "10" ? "dragon" : "card";
+  if (kind === "card" && jokerBlast) return;
+  return { attacker: card, target, side, kind };
 }
 
 function stackVictimChoices(attackers: Field, attacker: number, defenders: Field, target: number) {
@@ -746,7 +748,7 @@ function resolveAttack(game: Game, side: Side, attackerIndex: number, targetInde
     discardPile: discarded.length ? [...game.discardPile, ...discarded] : game.discardPile,
     selected: null,
     pendingAttack: undefined,
-    attackAnimation: makeAttackAnimation(attacker, defender.card, side),
+    attackAnimation: makeAttackAnimation(attacker, defender.card, side, blast),
     jokerExplosion: blast ? { turn: game.turn, survived: survivesBlast, attacker: attacker.card } : undefined,
     phase: nextSide,
     advantage: attack.bonus > 0,
@@ -1255,7 +1257,7 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
     if (!strike || paused) return;
     const timer = window.setTimeout(() => {
       setGame(current => current.attackAnimation === strike ? { ...current, attackAnimation: undefined } : current);
-    }, 1900);
+    }, strike.kind === "card" ? 1150 : 1900);
     return () => window.clearTimeout(timer);
   }, [game.attackAnimation, paused]);
 
@@ -2060,12 +2062,22 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
       {game.attackAnimation && !paused && (
         <aside className={`attack-cutaway attack-cutaway--${game.attackAnimation.kind}`} role="status">
           <strong>{game.attackAnimation.side === "computer" ? "Enemy " : ""}
-            {game.attackAnimation.kind === "dragon" ? "Dragon Fire" : "Ranger Attack"}</strong>
+            {game.attackAnimation.kind === "dragon" ? "Dragon Fire"
+              : game.attackAnimation.kind === "ranger" ? "Ranger Attack" : "Attack"}</strong>
           <div className="attack-cutaway-scene">
-            <img className="attack-cutaway-sprite" src={`${import.meta.env.BASE_URL}assets/effects/${
-              game.attackAnimation.kind === "dragon" ? "dragon-attack.gif" : "ranger-attack.gif?v=2"
-            }`} alt="" />
-            <span className={game.attackAnimation.kind === "dragon" ? "dragon-fire" : "ranger-arrow"} aria-hidden="true" />
+            {game.attackAnimation.kind === "card" ? (
+              <>
+                <div className="attack-cutaway-attacker"><CardFace card={game.attackAnimation.attacker} /></div>
+                <span className="attack-card-contact" aria-hidden="true" />
+              </>
+            ) : (
+              <>
+                <img className="attack-cutaway-sprite" src={`${import.meta.env.BASE_URL}assets/effects/${
+                  game.attackAnimation.kind === "dragon" ? "dragon-attack.gif" : "ranger-attack.gif?v=2"
+                }`} alt="" />
+                <span className={game.attackAnimation.kind === "dragon" ? "dragon-fire" : "ranger-arrow"} aria-hidden="true" />
+              </>
+            )}
             <div className="attack-cutaway-target"><CardFace card={game.attackAnimation.target} /></div>
           </div>
         </aside>

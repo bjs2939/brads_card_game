@@ -92,7 +92,7 @@ type SoundState = {
   phase: string;
   sound?: { cue: GameSound; lightning?: boolean };
   advantage?: boolean;
-  attackAnimation?: { kind: "ranger" | "dragon" };
+  attackAnimation?: { kind: "ranger" | "dragon" | "card" };
   specialStrike?: unknown;
   jokerExplosion?: unknown;
   deckWarning?: 0 | 1 | 2 | 3 | 4 | 5 | 10;
@@ -250,7 +250,7 @@ export function useGameSound(game: SoundState, enabled: boolean, outcome: "victo
     if (game.sound && game.sound !== old.sound) {
       if (game.sound.lightning) play("lightning", .08);
       if (game.attackAnimation?.kind === "dragon") play("dragon-fire", 1.1);
-      play(game.sound.cue, game.attackAnimation ? game.jokerExplosion ? 1.9 : 1.44
+      play(game.sound.cue, game.attackAnimation ? game.attackAnimation.kind === "card" ? .52 : game.jokerExplosion ? 1.9 : 1.44
         : game.sound.lightning ? .27 : game.sound.cue === "immunity" ? .17 : 0);
     }
     if (combatEffect) return;

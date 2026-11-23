@@ -1339,3 +1339,44 @@
   outline: 2px solid #ffd47c;
   outline-offset: 3px;
 }
+
+.attack-cutaway--card .attack-cutaway-scene {
+  justify-content: flex-end;
+  min-height: calc(var(--target-size) * 1.4 + 0.5rem);
+}
+.attack-cutaway-attacker {
+  position: absolute;
+  left: 0.55rem;
+  width: var(--target-size);
+  z-index: 1;
+  animation: card-attack-lunge 1100ms both;
+}
+.attack-cutaway--card .attack-cutaway-target {
+  animation: ranger-card-impact 360ms 520ms both;
+}
+.attack-card-contact {
+  position: absolute;
+  z-index: 2;
+  right: calc(0.55rem + var(--target-size) * 0.72);
+  width: 2.15rem;
+  aspect-ratio: 1;
+  border: 3px solid #ffe8a6;
+  border-radius: 50%;
+  box-shadow: 0 0 0.9rem #fbc771;
+  animation: card-attack-contact 280ms 520ms ease-out both;
+}
+@keyframes card-attack-lunge {
+  0%, 100% { left: 0.55rem; transform: none; }
+  29% { left: 0.25rem; transform: rotate(-10deg); animation-timing-function: ease-in; }
+  47% { left: calc(100% - 0.55rem - var(--target-size) * 1.8); transform: rotate(8deg); animation-timing-function: ease-out; }
+  67% { left: 0.55rem; transform: rotate(-4deg); }
+}
+@keyframes card-attack-contact {
+  0% { opacity: 0; transform: scale(0.45); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.35); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .attack-cutaway-attacker, .attack-card-contact { animation: none; }
+  .attack-card-contact { display: none; }
+}
