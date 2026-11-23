@@ -1315,16 +1315,47 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
     return () => window.clearTimeout(timer);
   }, [deckWarning, paused]);
 
+  const speechPageInactive = useRef(false);
+  const warningSpeechTimer = useRef<number>();
+  useEffect(() => {
+    function stopSpeech() {
+      window.clearTimeout(warningSpeechTimer.current);
+      window.speechSynthesis?.cancel();
+    }
+    function handlePageHide() {
+      speechPageInactive.current = true;
+      stopSpeech();
+    }
+    function handlePageShow() {
+      speechPageInactive.current = false;
+    }
+    function handleVisibility() {
+      if (document.visibilityState !== "visible") stopSpeech();
+    }
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("pageshow", handlePageShow);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("pageshow", handlePageShow);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      stopSpeech();
+    };
+  }, []);
+
   useEffect(() => {
     if (deckWarning === undefined || paused || !soundEnabled || !window.speechSynthesis ||
-        typeof SpeechSynthesisUtterance === "undefined") return;
+        typeof SpeechSynthesisUtterance === "undefined" || speechPageInactive.current ||
+        document.visibilityState !== "visible") return;
     const timer = window.setTimeout(() => {
+      if (speechPageInactive.current || document.visibilityState !== "visible") return;
       const message = deckWarning === 0 ? "Sudden Death! The draw deck is empty."
         : deckWarning === 1 ? "Warning! Only one card remains!" : `Warning! Only ${deckWarning} cards remain!`;
       const warning = new SpeechSynthesisUtterance(message);
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(warning);
     }, 3530);
+    warningSpeechTimer.current = timer;
     return () => window.clearTimeout(timer);
   }, [deckWarning, soundEnabled, paused]);
 
@@ -1428,7 +1459,8 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
       voice.cancel();
       return;
     }
-    if (warningActive || showingCombatEffect || skipAttack || (game.step !== "attack" && (isComputer || game.step === "draw"))) return;
+    if (speechPageInactive.current || document.visibilityState !== "visible" ||
+        warningActive || showingCombatEffect || skipAttack || (game.step !== "attack" && (isComputer || game.step === "draw"))) return;
     const spoken = spokenQueenCue.current;
     const newQueenCue = queenCue && (spoken?.round !== game.round || spoken.turn !== game.turn || spoken.cue !== queenCue);
     if (queenCue === "2nd Attack!" && !newQueenCue) return;
@@ -1440,8 +1472,6 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
     voice.cancel();
     voice.speak(announcement);
   }, [game.round, game.step, game.turn, isComputer, soundEnabled, outcome, showingCombatEffect, warningActive, skipAttack, paused, queenCue]);
-
-  useEffect(() => () => window.speechSynthesis?.cancel(), []);
 
   useEffect(() => {
     if (!isComputer || outcome || showingCombatEffect || warningActive || paused) return;
