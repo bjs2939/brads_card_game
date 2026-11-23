@@ -1,5 +1,40 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+export function useAudioForeground(onBackground: () => void) {
+  const [foreground, setForeground] = useState(true);
+  const pageHidden = useRef(false);
+  const focused = useRef(true);
+  const canPlayAudio = useCallback(() =>
+    !pageHidden.current && focused.current && document.visibilityState === "visible", []);
+
+  useEffect(() => {
+    const sync = () => {
+      const active = canPlayAudio();
+      if (!active) onBackground();
+      setForeground(active);
+    };
+    const hide = () => { pageHidden.current = true; sync(); };
+    const show = () => { pageHidden.current = false; focused.current = true; sync(); };
+    const blur = () => { focused.current = false; sync(); };
+    const focus = () => { focused.current = true; sync(); };
+    window.addEventListener("pagehide", hide);
+    window.addEventListener("pageshow", show);
+    window.addEventListener("blur", blur);
+    window.addEventListener("focus", focus);
+    document.addEventListener("visibilitychange", sync);
+    sync();
+    return () => {
+      window.removeEventListener("pagehide", hide);
+      window.removeEventListener("pageshow", show);
+      window.removeEventListener("blur", blur);
+      window.removeEventListener("focus", focus);
+      document.removeEventListener("visibilitychange", sync);
+    };
+  }, [canPlayAudio, onBackground]);
+
+  return { foreground, canPlayAudio };
+}
+
 type Tone = [frequency: number, at: number, length: number, gain: number, type?: OscillatorType, endFrequency?: number];
 type Noise = [at: number, length: number, gain: number, frequency: number];
 type Effect = { tones?: Tone[]; noise?: Noise[] };
@@ -56,7 +91,8 @@ type SoundState = {
   deckWarning?: 0 | 1 | 2 | 3 | 4 | 5 | 10;
 };
 
-function playEffect(context: AudioContext, noiseBuffer: AudioBuffer, cue: GameSound, delay = 0) {
+function playEffect(context: AudioContext, noiseBuffer: AudioBuffer, cue: GameSound,
+  trackSource: (source: AudioScheduledSourceNode) => void, delay = 0) {
   const effect: Effect = effects[cue];
   const origin = context.currentTime + delay;
 
@@ -76,6 +112,7 @@ function playEffect(context: AudioContext, noiseBuffer: AudioBuffer, cue: GameSo
     oscillator.frequency.setValueAtTime(frequency, start);
     if (endFrequency) oscillator.frequency.exponentialRampToValueAtTime(endFrequency, start + length);
     oscillator.connect(envelope(start, length, level));
+    trackSource(oscillator);
     oscillator.start(start);
     oscillator.stop(start + length);
   }
@@ -90,6 +127,7 @@ function playEffect(context: AudioContext, noiseBuffer: AudioBuffer, cue: GameSo
     filter.Q.value = 0.8;
     noise.connect(filter);
     filter.connect(envelope(start, length, level));
+    trackSource(noise);
     noise.start(start);
     noise.stop(start + length);
   }
@@ -119,11 +157,27 @@ function prepareRecording(cue: GameSound, buffer: AudioBuffer) {
 
 export function useGameSound(game: SoundState, enabled: boolean, outcome: "victory" | "defeat" | "draw" | null) {
   const audio = useRef<{ context: AudioContext; noise: AudioBuffer; recordings: Map<GameSound, ReturnType<typeof prepareRecording>> } | null>(null);
+  const activeSources = useRef(new Set<AudioScheduledSourceNode>());
+  const stopEffects = useCallback(() => {
+    for (const source of activeSources.current) {
+      try { source.stop(); } catch { /* The source already stopped. */ }
+      source.disconnect();
+    }
+    activeSources.current.clear();
+  }, []);
+  const { canPlayAudio } = useAudioForeground(stopEffects);
+  const trackSource = useCallback((source: AudioScheduledSourceNode) => {
+    activeSources.current.add(source);
+    source.addEventListener("ended", () => {
+      activeSources.current.delete(source);
+      source.disconnect();
+    }, { once: true });
+  }, []);
   const previous = useRef(game);
   const previousOutcome = useRef(outcome);
 
   function unlock() {
-    if (!enabled || !window.AudioContext) return;
+    if (!enabled || !canPlayAudio() || !window.AudioContext) return;
     try {
       if (!audio.current) {
         const context = new AudioContext();
@@ -142,7 +196,7 @@ export function useGameSound(game: SoundState, enabled: boolean, outcome: "victo
             .then(buffer => recordings.set(cue, prepareRecording(cue, buffer)))
             .catch(() => {});
         }
-        playEffect(context, noise, "play");
+        playEffect(context, noise, "play", trackSource);
       }
       if (audio.current.context.state === "suspended") void audio.current.context.resume().catch(() => {});
     } catch {
@@ -156,13 +210,13 @@ export function useGameSound(game: SoundState, enabled: boolean, outcome: "victo
     previousOutcome.current = outcome;
     previous.current = game;
     const engine = audio.current;
-    if (!enabled || !engine) return;
+    if (!enabled || !engine || !canPlayAudio()) return;
 
     const play = (cue: GameSound, delay = 0) => {
       const { context, noise, recordings } = engine;
       const recording = recordings.get(cue);
       if (!recording) {
-        playEffect(context, noise, cue, delay);
+        playEffect(context, noise, cue, trackSource, delay);
         return;
       }
       const source = context.createBufferSource();
@@ -177,6 +231,7 @@ export function useGameSound(game: SoundState, enabled: boolean, outcome: "victo
       }
       source.connect(gain);
       gain.connect(context.destination);
+      trackSource(source);
       source.start(start, offset);
       if (cue === "lightning") source.stop(start + 2.15);
     };
@@ -204,13 +259,18 @@ export function useGameSound(game: SoundState, enabled: boolean, outcome: "victo
       play(game.phase.startsWith("computer") ? "enemy" : "player", newRound ? .2 : .18);
       if (game.drewCard && (old.drawPile !== game.drawPile || strikeFinished)) play("draw", .4);
     }
-  }, [game, enabled, outcome]);
+  }, [game, enabled, outcome, canPlayAudio, trackSource]);
+
+  useEffect(() => {
+    if (!enabled) stopEffects();
+  }, [enabled, stopEffects]);
 
   useEffect(() => () => {
+    stopEffects();
     const engine = audio.current;
     audio.current = null;
     if (engine) void engine.context.close().catch(() => {});
-  }, []);
+  }, [stopEffects]);
 
   return unlock;
 }
@@ -234,14 +294,19 @@ export function useBackgroundMusic(track: Track | null) {
     if (audio.current) audio.current.volume = trackVolume.current * (value ? 0.28 : 1);
   }, []);
 
-  function start(which: Track) {
-    if (muted.current) return;
+  const stopMusic = useCallback(() => {
+    audio.current?.pause();
+    setEnabled(false);
+  }, []);
+  const { foreground, canPlayAudio } = useAudioForeground(stopMusic);
+
+  const start = useCallback((which: Track) => {
+    if (muted.current || !canPlayAudio()) return;
     const player = audio.current ?? new Audio();
     audio.current = player;
     const { file, volume } = backgroundTracks[which];
     const source = new URL(`${import.meta.env.BASE_URL}assets/audio/music/${file}`, document.baseURI).href;
     if (player.src !== source) player.src = source;
-    player.autoplay = true;
     player.preload = "auto";
     player.loop = true;
     trackVolume.current = volume;
@@ -250,7 +315,7 @@ export function useBackgroundMusic(track: Track | null) {
       () => { if (audio.current === player && player.src === source && !player.paused) setEnabled(true); },
       () => { if (audio.current === player && player.src === source && player.paused) setEnabled(false); },
     );
-  }
+  }, [canPlayAudio]);
 
   function toggle() {
     if (enabled) {
@@ -264,12 +329,9 @@ export function useBackgroundMusic(track: Track | null) {
   }
 
   useEffect(() => {
-    if (track) start(track);
-    else {
-      audio.current?.pause();
-      setEnabled(false);
-    }
-  }, [track]);
+    if (track && foreground) start(track);
+    else stopMusic();
+  }, [track, foreground, start, stopMusic]);
 
   useEffect(() => {
     if (!track || enabled || muted.current) return;
@@ -281,7 +343,7 @@ export function useBackgroundMusic(track: Track | null) {
 
     document.addEventListener("click", unlockFromInteraction, true);
     return () => document.removeEventListener("click", unlockFromInteraction, true);
-  }, [track, enabled]);
+  }, [track, enabled, start]);
 
   useEffect(() => () => {
     audio.current?.pause();

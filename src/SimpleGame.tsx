@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import CardFace from "./CardFace";
 import { useCardMotion } from "./useCardMotion";
-import { useGameSound, type GameSound } from "./useGameSound";
+import { useAudioForeground, useGameSound, type GameSound } from "./useGameSound";
 import "./SimpleGame.css";
 import { dealSimpleGame, ranks } from "./game_engine/deck";
 import type { Card, Suit } from "./game_engine/types";
@@ -1315,40 +1315,19 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
     return () => window.clearTimeout(timer);
   }, [deckWarning, paused]);
 
-  const speechPageInactive = useRef(false);
   const warningSpeechTimer = useRef<number>();
-  useEffect(() => {
-    function stopSpeech() {
-      window.clearTimeout(warningSpeechTimer.current);
-      window.speechSynthesis?.cancel();
-    }
-    function handlePageHide() {
-      speechPageInactive.current = true;
-      stopSpeech();
-    }
-    function handlePageShow() {
-      speechPageInactive.current = false;
-    }
-    function handleVisibility() {
-      if (document.visibilityState !== "visible") stopSpeech();
-    }
-    window.addEventListener("pagehide", handlePageHide);
-    window.addEventListener("pageshow", handlePageShow);
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => {
-      window.removeEventListener("pagehide", handlePageHide);
-      window.removeEventListener("pageshow", handlePageShow);
-      document.removeEventListener("visibilitychange", handleVisibility);
-      stopSpeech();
-    };
+  const stopSpeech = useCallback(() => {
+    window.clearTimeout(warningSpeechTimer.current);
+    window.speechSynthesis?.cancel();
   }, []);
+  const { canPlayAudio: canSpeak } = useAudioForeground(stopSpeech);
+  useEffect(() => stopSpeech, [stopSpeech]);
 
   useEffect(() => {
     if (deckWarning === undefined || paused || !soundEnabled || !window.speechSynthesis ||
-        typeof SpeechSynthesisUtterance === "undefined" || speechPageInactive.current ||
-        document.visibilityState !== "visible") return;
+        typeof SpeechSynthesisUtterance === "undefined" || !canSpeak()) return;
     const timer = window.setTimeout(() => {
-      if (speechPageInactive.current || document.visibilityState !== "visible") return;
+      if (!canSpeak()) return;
       const message = deckWarning === 0 ? "Sudden Death! The draw deck is empty."
         : deckWarning === 1 ? "Warning! Only one card remains!" : `Warning! Only ${deckWarning} cards remain!`;
       const warning = new SpeechSynthesisUtterance(message);
@@ -1357,7 +1336,7 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
     }, 3530);
     warningSpeechTimer.current = timer;
     return () => window.clearTimeout(timer);
-  }, [deckWarning, soundEnabled, paused]);
+  }, [deckWarning, soundEnabled, paused, canSpeak]);
 
   const isComputer = game.phase !== "player";
   const isMovingUp = !isComputer && game.step === "move-up";
@@ -1459,7 +1438,7 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
       voice.cancel();
       return;
     }
-    if (speechPageInactive.current || document.visibilityState !== "visible" ||
+    if (!canSpeak() ||
         warningActive || showingCombatEffect || skipAttack || (game.step !== "attack" && (isComputer || game.step === "draw"))) return;
     const spoken = spokenQueenCue.current;
     const newQueenCue = queenCue && (spoken?.round !== game.round || spoken.turn !== game.turn || spoken.cue !== queenCue);
@@ -1471,7 +1450,7 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
     announcement.rate = 1.02;
     voice.cancel();
     voice.speak(announcement);
-  }, [game.round, game.step, game.turn, isComputer, soundEnabled, outcome, showingCombatEffect, warningActive, skipAttack, paused, queenCue]);
+  }, [game.round, game.step, game.turn, isComputer, soundEnabled, outcome, showingCombatEffect, warningActive, skipAttack, paused, queenCue, canSpeak]);
 
   useEffect(() => {
     if (!isComputer || outcome || showingCombatEffect || warningActive || paused) return;
