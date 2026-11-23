@@ -24,6 +24,9 @@ const opponentTips = [
   "A 6 can attack from the back rank and can reach past the enemy front rank.",
   "A 5 survives a Joker explosion. A 2 defeats a 10 and is immune to its attacks.",
   "Use a Jack as a shield or spend it to spy on vulnerable enemy cards.",
+  "Sacrifice a Queen from your hand to unlock Double Attack and attack twice in one turn.",
+  "If every attack would leave you worse off, press End Turn and wait for a better opening.",
+  "Save a threatened card with Retreat on the right. It returns to your hand and ends your turn.",
   "A King can defeat several cards in one stack. Cards immune to its suit survive.",
   "When the enemy battlefield is empty, a front-rank attacker can strike the castle.",
 ];
