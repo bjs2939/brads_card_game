@@ -66,12 +66,13 @@ export function useCardMotion(game: View) {
         const y = origin.top - rect.top;
         if (!flipping && Math.abs(x) < 1 && Math.abs(y) < 1) return;
 
+        const zIndex = element.classList.contains("simple-game-shield-card") ? 3 : 2;
         element.animate([
           {
             transform: `translate(${x}px, ${y}px) scale(${origin.width / rect.width}, ${origin.height / rect.height})`,
-            zIndex: 2,
+            zIndex,
           },
-          { transform: "none", zIndex: 2 },
+          { transform: "none", zIndex },
         ], {
           duration: drawing ? 460 : 340,
           delay: drawing ? 380 : 0,

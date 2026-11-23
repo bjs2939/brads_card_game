@@ -173,6 +173,7 @@
 
 .simple-game-shield-card {
   position: absolute;
+  z-index: 3;
   inset: auto 0 0;
   aspect-ratio: 7 / 5;
   pointer-events: none;
