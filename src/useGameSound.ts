@@ -4,8 +4,9 @@ export function useAudioForeground(onBackground: () => void) {
   const [foreground, setForeground] = useState(true);
   const pageHidden = useRef(false);
   const focused = useRef(true);
+  const frozen = useRef(false);
   const canPlayAudio = useCallback(() =>
-    !pageHidden.current && focused.current && document.visibilityState === "visible", []);
+    !pageHidden.current && !frozen.current && focused.current && document.visibilityState === "visible", []);
 
   useEffect(() => {
     const sync = () => {
@@ -14,14 +15,18 @@ export function useAudioForeground(onBackground: () => void) {
       setForeground(active);
     };
     const hide = () => { pageHidden.current = true; sync(); };
-    const show = () => { pageHidden.current = false; focused.current = true; sync(); };
+    const show = () => { pageHidden.current = false; frozen.current = false; focused.current = true; sync(); };
     const blur = () => { focused.current = false; sync(); };
     const focus = () => { focused.current = true; sync(); };
+    const freeze = () => { frozen.current = true; sync(); };
+    const resume = () => { frozen.current = false; sync(); };
     window.addEventListener("pagehide", hide);
     window.addEventListener("pageshow", show);
     window.addEventListener("blur", blur);
     window.addEventListener("focus", focus);
     document.addEventListener("visibilitychange", sync);
+    document.addEventListener("freeze", freeze);
+    document.addEventListener("resume", resume);
     sync();
     return () => {
       window.removeEventListener("pagehide", hide);
@@ -29,6 +34,8 @@ export function useAudioForeground(onBackground: () => void) {
       window.removeEventListener("blur", blur);
       window.removeEventListener("focus", focus);
       document.removeEventListener("visibilitychange", sync);
+      document.removeEventListener("freeze", freeze);
+      document.removeEventListener("resume", resume);
     };
   }, [canPlayAudio, onBackground]);
 
@@ -282,46 +289,93 @@ const backgroundTracks = {
 
 type Track = keyof typeof backgroundTracks;
 
+type MusicPlayback = { track: Track; abort: AbortController; source?: AudioBufferSourceNode };
+
 export function useBackgroundMusic(track: Track | null) {
   const [enabled, setEnabled] = useState(false);
-  const audio = useRef<HTMLAudioElement | null>(null);
+  const engine = useRef<{ context: AudioContext; gain: GainNode }>();
+  const playback = useRef<MusicPlayback>();
+  const decoded = useRef<{ track: Track; buffer: AudioBuffer }>();
   const muted = useRef(false);
   const ducked = useRef(false);
-  const trackVolume = useRef(0);
+  const hasInteracted = useRef(false);
 
   const setDucked = useCallback((value: boolean) => {
     ducked.current = value;
-    if (audio.current) audio.current.volume = trackVolume.current * (value ? 0.28 : 1);
+    const current = playback.current;
+    if (engine.current && current) {
+      engine.current.gain.gain.value = backgroundTracks[current.track].volume * (value ? 0.28 : 1);
+    }
   }, []);
 
   const stopMusic = useCallback(() => {
-    audio.current?.pause();
+    const current = playback.current;
+    playback.current = undefined;
+    current?.abort.abort();
+    if (current?.source) {
+      current.source.stop();
+      current.source.disconnect();
+    }
     setEnabled(false);
   }, []);
-  const { foreground, canPlayAudio } = useAudioForeground(stopMusic);
+
+  const leavePage = useCallback(() => {
+    hasInteracted.current = false;
+    stopMusic();
+    const context = engine.current?.context;
+    if (context && context.state !== "closed") void context.suspend().catch(() => {});
+  }, [stopMusic]);
+  const { canPlayAudio } = useAudioForeground(leavePage);
 
   const start = useCallback((which: Track) => {
-    if (muted.current || !canPlayAudio()) return;
-    const player = audio.current ?? new Audio();
-    audio.current = player;
+    if (muted.current || !canPlayAudio() || !window.AudioContext || playback.current?.track === which) return;
+    hasInteracted.current = true;
+    stopMusic();
+    if (!engine.current) {
+      const context = new AudioContext();
+      const gain = context.createGain();
+      gain.connect(context.destination);
+      engine.current = { context, gain };
+    }
+
+    const { context, gain } = engine.current;
+    const current: MusicPlayback = { track: which, abort: new AbortController() };
+    playback.current = current;
     const { file, volume } = backgroundTracks[which];
-    const source = new URL(`${import.meta.env.BASE_URL}assets/audio/music/${file}`, document.baseURI).href;
-    if (player.src !== source) player.src = source;
-    player.preload = "auto";
-    player.loop = true;
-    trackVolume.current = volume;
-    player.volume = volume * (ducked.current ? 0.28 : 1);
-    void player.play().then(
-      () => { if (audio.current === player && player.src === source && !player.paused) setEnabled(true); },
-      () => { if (audio.current === player && player.src === source && player.paused) setEnabled(false); },
-    );
-  }, [canPlayAudio]);
+    const cached = decoded.current;
+    if (cached?.track !== which) decoded.current = undefined;
+    const ready = cached?.track === which ? Promise.resolve(cached.buffer)
+      : fetch(`${import.meta.env.BASE_URL}assets/audio/music/${file}`, { signal: current.abort.signal })
+          .then(response => {
+            if (!response.ok) throw new Error("Music asset unavailable");
+            return response.arrayBuffer();
+          })
+          .then(bytes => context.decodeAudioData(bytes));
+
+    void Promise.all([context.resume(), ready]).then(([, buffer]) => {
+      if (playback.current !== current) return;
+      if (!canPlayAudio() || muted.current || context.state !== "running") {
+        stopMusic();
+        return;
+      }
+      decoded.current = { track: which, buffer };
+      const source = context.createBufferSource();
+      source.buffer = buffer;
+      source.loop = true;
+      source.connect(gain);
+      gain.gain.value = volume * (ducked.current ? 0.28 : 1);
+      source.start();
+      current.source = source;
+      setEnabled(true);
+    }).catch(() => {
+      if (playback.current === current) stopMusic();
+    });
+  }, [canPlayAudio, stopMusic]);
 
   function toggle() {
     if (enabled) {
       muted.current = true;
-      audio.current?.pause();
-      setEnabled(false);
+      stopMusic();
     } else if (track) {
       muted.current = false;
       start(track);
@@ -329,26 +383,27 @@ export function useBackgroundMusic(track: Track | null) {
   }
 
   useEffect(() => {
-    if (track && foreground) start(track);
-    else stopMusic();
-  }, [track, foreground, start, stopMusic]);
+    if (!track) stopMusic();
+    else if (hasInteracted.current) start(track);
+  }, [track, start, stopMusic]);
 
   useEffect(() => {
-    if (!track || enabled || muted.current) return;
-
+    if (!track || enabled) return;
     function unlockFromInteraction(event: MouseEvent) {
       if (event.target instanceof Element && event.target.closest("[data-music-toggle]")) return;
-      if (track && audio.current?.paused !== false) start(track);
+      if (track) start(track);
     }
-
     document.addEventListener("click", unlockFromInteraction, true);
     return () => document.removeEventListener("click", unlockFromInteraction, true);
   }, [track, enabled, start]);
 
   useEffect(() => () => {
-    audio.current?.pause();
-    audio.current = null;
-  }, []);
+    stopMusic();
+    const audio = engine.current;
+    engine.current = undefined;
+    decoded.current = undefined;
+    if (audio) void audio.context.close().catch(() => {});
+  }, [stopMusic]);
 
   return { enabled, toggle, start, setDucked };
 }
