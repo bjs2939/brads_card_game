@@ -23,7 +23,7 @@ const opponentTips = [
   "Cards 2 through 7 can stack with cards of the same number. 8s, 9s, and 10s already have high power on their own and cannot stack.",
   "A 6 can attack from the back rank and can reach past the enemy front rank.",
   "A 5 survives a Joker explosion. A 2 defeats a 10 and is immune to its attacks.",
-  "Use a Jack as a shield or spend it to spy on vulnerable enemy cards.",
+  "Spend a Jack to spy on vulnerable enemy cards. Using Spy ends your turn.",
   "Sacrifice a Queen from your hand to unlock Double Attack and attack twice in one turn.",
   "If every attack would leave you worse off, press End Turn and wait for a better opening.",
   "Save a threatened card with Retreat on the right. It returns to your hand and ends your turn.",
@@ -894,7 +894,7 @@ function CardDetails({ card, layers }: { card: Card | null | undefined; layers: 
       case "A": abilities.push("Instant Steal: take vulnerable cards and shields. Immune cards stay in play, and shields with no carrier return to their owner's hand."); break;
       case "K": abilities.push("Instant Kill: defeat every vulnerable card in the target stack. Suit-immune cards survive."); break;
       case "J": abilities.push("Shield: uses its own suit and the protected card’s strength.");
-        abilities.push("Spy: reveal enemy cards and shields that are not immune to this Jack’s suit. Discard the Jack after spying.");
+        abilities.push("Spy: reveal enemy cards and shields that are not immune to this Jack’s suit. Using Spy discards the Jack and ends your turn.");
       case "Q": abilities.push("Shield: uses its own suit and the protected card’s strength. Can disguise a Joker.");
         abilities.push("Double Attack: discard this Queen from your hand to attack twice this turn.");
         break;
@@ -1629,13 +1629,15 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
         ...reveal(unit),
         shields: unit.shields?.map(reveal),
       }));
-      return {
+      const next = finishPlayerTurn({
         ...current, computerField,
         player: current.player.filter(card => card !== jack),
         discardPile: [...current.discardPile, jack],
-        selectedShield: null,
-        result: revealed ? `Spy revealed ${revealed} ${revealed === 1 ? "card" : "cards"}.`
-          : "Spy found no cards it could reveal.",
+      });
+      return {
+        ...next,
+        result: revealed ? `Spy revealed ${revealed} ${revealed === 1 ? "card" : "cards"}. Turn ended.`
+          : "Spy found no cards it could reveal. Turn ended.",
         spyFlash: jack,
         sound: { cue: "spy" },
       };
@@ -1935,7 +1937,7 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
     if (game.selectedStack) return "Choose a matching back-rank card to stack onto.";
     if (game.movingShield) return "Choose another number card to receive the shield.";
     if (game.selectedShield) return spySelected
-      ? canChooseShield ? "Choose a number card or Joker to shield, or press Spy." : "Press Spy to reveal eligible enemy cards."
+      ? canChooseShield ? "Choose a card to shield, or press Spy to reveal cards and end your turn." : "Press Spy to reveal eligible enemy cards and end your turn."
       : doubleAttackSelected
         ? canChooseShield ? "Choose a card to shield, or activate Double Attack." : "Activate Double Attack to sacrifice the Queen."
         : "Choose a number card or Joker to shield.";
