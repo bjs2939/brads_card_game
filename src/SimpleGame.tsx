@@ -1258,9 +1258,10 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
 
   const deckWarning = showingCombatEffect ? undefined : game.deckWarning;
   const warningActive = deckWarning !== undefined;
+  const [turnTimerEnabled, setTurnTimerEnabled] = useState(true);
   const [phaseSeconds, setPhaseSeconds] = useState(30);
   const phaseClock = useRef({ round: game.round, turn: game.turn, step: game.step, remaining: 30_000 });
-  const timedPhase = game.phase === "player" && game.step !== "draw" && !outcome &&
+  const timedPhase = turnTimerEnabled && game.phase === "player" && game.step !== "draw" && !outcome &&
     !showingCombatEffect && !warningActive;
 
   useEffect(() => {
@@ -2014,9 +2015,11 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
       <dialog ref={stackTargetDialog} className="game-mode-picker stack-target-picker"
         aria-labelledby="stack-target-title" onCancel={event => event.preventDefault()}>
         <h2 id="stack-target-title">Choose which cards to defeat</h2>
-        <p className="phase-timer" role="timer" aria-label="Time left to choose" data-low={phaseSeconds <= 5}>
-          0:{String(phaseSeconds).padStart(2, "0")}
-        </p>
+        {timedPhase && (
+          <p className="phase-timer" role="timer" aria-label="Time left to choose" data-low={phaseSeconds <= 5}>
+            0:{String(phaseSeconds).padStart(2, "0")}
+          </p>
+        )}
         <div className="game-mode-options">
           {game.pendingAttack?.choices?.map(victims => (
             <button key={victims.join("-")} type="button" className="stack-target-option" onClick={() => {
@@ -2404,6 +2407,11 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
           <span className="match-footer-icon" aria-hidden="true">{soundEnabled ? "🔊" : "🔇"}</span>
           Sound <span className="match-footer-state" aria-hidden="true">{soundEnabled ? "On" : "Off"}</span>
         </button>
+        <label className="match-footer-button match-footer-timer">
+          <input type="checkbox" checked={turnTimerEnabled}
+            onChange={event => setTurnTimerEnabled(event.currentTarget.checked)} />
+          Turn Timer
+        </label>
         <button className="match-footer-button match-footer-home" onClick={onBack}>
           <span className="match-footer-icon" aria-hidden="true">←</span>
           Back to Home

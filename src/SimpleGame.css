@@ -1327,3 +1327,15 @@
   background: #322d27;
   color: #ffe0a4;
 }
+
+.match-footer-timer input {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: #ffd47c;
+  cursor: pointer;
+}
+.match-footer-timer:has(input:focus-visible) {
+  outline: 2px solid #ffd47c;
+  outline-offset: 3px;
+}
