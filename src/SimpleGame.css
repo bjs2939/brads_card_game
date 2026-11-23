@@ -1380,3 +1380,150 @@
   .attack-cutaway-attacker, .attack-card-contact { animation: none; }
   .attack-card-contact { display: none; }
 }
+
+.side-panel-toggle {
+  width: 100%;
+  min-height: 2.15rem;
+  padding: 0.36rem 0.55rem;
+  border: 1px solid #54708b;
+  border-radius: 0.45rem;
+  background: #203b54;
+  color: #e9f3ff;
+  text-align: left;
+  font: 700 0.76rem/1.2 system-ui, sans-serif;
+  cursor: pointer;
+}
+.side-panel-toggle[aria-expanded]::after {
+  content: "+";
+  float: right;
+  margin-left: 0.3rem;
+  color: #ffd47c;
+}
+.side-panel-toggle[aria-expanded="true"]::after { content: "-"; }
+.side-panel-toggle[aria-pressed="true"] {
+  border-color: #ffd47c;
+  color: #ffdf9f;
+}
+.side-panel-toggle:focus-visible { outline: 2px solid #ffd47c; outline-offset: 2px; }
+.side-panel-content { padding-top: 0.35rem; }
+.side-panel-content[hidden] { display: none; }
+.card-info-panel { margin-top: auto; }
+.card-info-panel .inspect-card-button { max-width: 8rem; margin: 0 auto; }
+.card-info-panel .card-details { margin-top: 0.55rem; }
+.compact-scoreboard { display: none; }
+.player-hand-heading h2 { margin: 0.35rem 0; }
+
+@media (max-width: 720px) {
+  body:has(.simple-game-table) { margin: 0; }
+  .simple-game-table {
+    --hand-card-width: clamp(2.65rem, 11vw, 3.65rem);
+    --field-card-width: clamp(3.6rem, 21vw, 6rem);
+    padding: 0.5rem 0.45rem calc(7rem + env(safe-area-inset-bottom));
+  }
+  .simple-game-table > h1 {
+    font-size: clamp(1.4rem, 5.6vw, 2rem);
+    margin: 0.25rem 0;
+  }
+  .simple-game-table .turn-steps { margin: 0.35rem 0; }
+  .turn-steps span { padding: 0.2rem 0.38rem; }
+  .simple-game-table .opponent-hand-heading { font-size: 0.82rem; }
+
+  .hand-row {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: var(--hand-card-width);
+    justify-content: safe center;
+    gap: 0.32rem;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+    padding: 0.25rem;
+  }
+  .opponent-hand-row { grid-auto-columns: clamp(1.5rem, 7vw, 2.35rem); }
+  .opponent-hand-row[data-castle-targeting="true"] {
+    grid-auto-columns: var(--hand-card-width);
+  }
+
+  .compact-scoreboard {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin: 0.4rem auto;
+    font: 700 0.77rem/1.2 system-ui, sans-serif;
+  }
+  .compact-scoreboard > span {
+    padding: 0.25rem 0.4rem;
+    border: 1px solid #586476;
+    border-radius: 0.35rem;
+    background: #172c41;
+  }
+  .compact-scoreboard strong { margin-left: 0.16rem; font-variant-numeric: tabular-nums; }
+  .compact-scoreboard .compact-scoreboard-enemy { color: #ffbec6; }
+  .compact-scoreboard .compact-scoreboard-player { color: #b7dcff; }
+
+  .simple-game-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas: "battlefield battlefield" "match-info card-info";
+    gap: 0.4rem;
+    max-width: 34rem;
+    margin-inline: auto;
+  }
+  .simple-game-board > .battlefield-panel {
+    grid-area: battlefield;
+    padding: 0.25rem 0.4rem;
+  }
+  .simple-game-board .battlefield-rank { margin-block: 0.2rem; }
+  .simple-game-board > .match-info-panel { grid-area: match-info; }
+  .simple-game-board > .simple-game-board-right { display: contents; }
+  .simple-game-board .card-info-panel {
+    grid-area: card-info;
+    min-width: 0;
+    margin: 0;
+    padding: 0.16rem;
+    border-radius: 0.55rem;
+    background: #10233a;
+  }
+  .side-panel-toggle { min-height: 2.65rem; }
+  .side-panel-content [data-draw-origin] { max-width: 4rem; margin-inline: auto; }
+  .match-log { max-height: 8rem; }
+  .match-log-form input { font-size: 16px; }
+
+  .simple-game-board-right .discard-controls {
+    position: fixed;
+    z-index: 8;
+    inset: auto 0 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin: 0;
+    padding: 0.4rem 0.5rem calc(0.4rem + env(safe-area-inset-bottom));
+    border-top: 1px solid #516f8b;
+    background: #10233a;
+    box-shadow: 0 -0.35rem 1.25rem #09182c80;
+  }
+  .discard-controls > button {
+    width: auto;
+    min-height: 2.65rem;
+    margin: 0;
+    padding-inline: 0.5rem;
+    font-size: 0.75rem;
+  }
+  .discard-controls > .phase-timer { font-size: 0.95rem; }
+  .discard-controls > .simple-game-end-turn { min-width: 5.35rem; }
+
+  .player-hand { padding-inline: 0.25rem; }
+  .player-hand-heading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .player-hand-heading .side-panel-toggle { width: auto; }
+  .touch-stack-hint { margin: 0.25rem; font: 0.8rem/1.25 system-ui, sans-serif; }
+  .simple-game-table > .simple-game-status { width: auto; margin-inline: 0; }
+}

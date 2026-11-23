@@ -40,6 +40,8 @@ const handLayout = {
   gap: "0.5rem",
 };
 
+const compactBoardQuery = "(max-width: 720px)";
+
 const battlefieldLayout = {
   ...handLayout,
   gridTemplateColumns: `repeat(${slotsPerRank}, minmax(0, var(--field-card-width)))`,
@@ -1164,6 +1166,22 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
   onResultChange: (visible: boolean) => void;
 }) {
   const [game, setGame] = useState(startGame);
+  const [compactBoard, setCompactBoard] = useState(() => window.matchMedia(compactBoardQuery).matches);
+  const [showMatchInfo, setShowMatchInfo] = useState(!compactBoard);
+  const [showCardInfo, setShowCardInfo] = useState(!compactBoard);
+  const [stackFromHand, setStackFromHand] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia(compactBoardQuery);
+    const onLayoutChange = (event: MediaQueryListEvent) => {
+      setCompactBoard(event.matches);
+      setShowMatchInfo(!event.matches);
+      setShowCardInfo(!event.matches);
+      setStackFromHand(false);
+    };
+    media.addEventListener("change", onLayoutChange);
+    return () => media.removeEventListener("change", onLayoutChange);
+  }, []);
+  useEffect(() => setStackFromHand(false), [game.turn]);
   const [paused, setPaused] = useState(false);
   const pauseDialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -1193,7 +1211,7 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
   useEffect(() => {
     const log = logView.current;
     if (log && followLog.current) log.scrollTop = log.scrollHeight;
-  }, [matchLog]);
+  }, [matchLog, showMatchInfo]);
   const [inspection, setInspection] = useState<{ card: Card | null; round: object }>();
   const inspected = inspection?.round === game.round ? inspection.card : undefined;
   const inspectedOwnUnit = game.playerField.find(unit => unit && unit.card === inspected);
@@ -1377,6 +1395,9 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
   const unlockSound = useGameSound(game, soundEnabled && !paused, showingCombatEffect ? null : outcome);
   const draggedCard = useRef<DraggedCard | null>(null);
   const canDeployFromHand = canDeployThisPhase(game) && hasOpenLane;
+  const canToggleHandStack = compactBoard && canDeployFromHand && canStackFromHand &&
+    game.player.some(card => hasHandStack(game.playerField, card));
+  const choosingHandStack = canToggleHandStack && stackFromHand;
   const canEndTurn = !isComputer && game.step !== "draw" && !game.pendingAttack && !warningActive && !showingCombatEffect;
   const pendingTarget = game.pendingAttack && game.computerField[game.pendingAttack.target];
   const pendingPower = pendingTarget && game.pendingAttack?.isStack
@@ -2207,8 +2228,8 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
           </div>
         )}
       </div>
-      <h2>Computer’s hand</h2>
-      <div style={handLayout}>
+      <h2 className="opponent-hand-heading">Computer’s hand</h2>
+      <div className="hand-row opponent-hand-row" data-castle-targeting={castleTargeting} style={compactBoard ? undefined : handLayout}>
         {Array.from({ length: game.computer.length }, (_, index) => (
           <div key={index} data-card-position={`computer-${index}`}>
             {castleTargeting ? (
@@ -2224,8 +2245,16 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
         ))}
       </div>
 
+      <div className="compact-scoreboard" aria-label="Match overview">
+        <span className="compact-scoreboard-enemy">Opponent <strong>{health(game.computer, game.computerField)}</strong></span>
+        <span className="compact-scoreboard-player">You <strong>{health(game.player, game.playerField)}</strong></span>
+        <span>Deck <strong>{game.drawPile.length}</strong></span>
+      </div>
       <div className="simple-game-board">
-        <section aria-label="Health, draw deck, and match log">
+        <section className="match-info-panel" aria-label="Health, draw deck, and match log">
+          <button type="button" className="side-panel-toggle" aria-expanded={showMatchInfo}
+            aria-controls="match-info-content" onClick={() => setShowMatchInfo(open => !open)}>Match details</button>
+          <div id="match-info-content" className="side-panel-content" hidden={!showMatchInfo}>
           <h3>Draw deck</h3>
           <div data-draw-origin>{game.drawPile.length > 0 && <CardFace faceDown />}</div>
           <p>{game.drawPile.length} cards</p>
@@ -2277,9 +2306,10 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
               <dd>{game.drawPile.length}</dd>
             </div>
           </dl>
+          </div>
         </section>
 
-        <section aria-labelledby="battlefield-heading">
+        <section className="battlefield-panel" aria-labelledby="battlefield-heading">
           <h2 id="battlefield-heading" title="Drag to rearrange within a rank. Hold Shift to swap cards that can stack.">Battlefield</h2>
           {(["back", "front"] as const).map(rank => (
             <BattlefieldRow
@@ -2305,15 +2335,7 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
         </section>
 
         <section className="simple-game-board-right" aria-label="Discard, turn controls, and card details">
-          <div className="discard-controls">
-          <h3>Discard / Graveyard</h3>
-          {latestDiscard && (
-            <button className={inspected === latestDiscard ? "inspect-card-button card-inspected" : "inspect-card-button"} data-card-position="discard-0"
-              onFocus={() => inspect(latestDiscard)} onClick={() => inspect(latestDiscard)}>
-              <CardFace card={latestDiscard} />
-            </button>
-          )}
-          <p>{game.discardPile.length} cards</p>
+          <div className="discard-controls" role="group" aria-label="Turn controls">
           {!isComputer && nextStep && (
             <button className="simple-game-next-step" onClick={advanceStep}>
               Next: {turnSteps[nextStep]}
@@ -2340,6 +2362,18 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
             Retreat
           </button>
           </div>
+          <div className="card-info-panel">
+            <button type="button" className="side-panel-toggle" aria-expanded={showCardInfo}
+              aria-controls="card-info-content" onClick={() => setShowCardInfo(open => !open)}>Card details</button>
+            <div id="card-info-content" className="side-panel-content" hidden={!showCardInfo}>
+          <h3>Discard / Graveyard</h3>
+          {latestDiscard && (
+            <button className={inspected === latestDiscard ? "inspect-card-button card-inspected" : "inspect-card-button"} data-card-position="discard-0"
+              onFocus={() => inspect(latestDiscard)} onClick={() => inspect(latestDiscard)}>
+              <CardFace card={latestDiscard} />
+            </button>
+          )}
+          <p>{game.discardPile.length} cards</p>
           <CardDetails card={inspected} layers={inspectedUnit?.shields?.length ?? 0} />
           {canReallocateShields && inspectedOwnUnit?.shields?.map((layer, index) => (
             <button key={index} className="shield-move-button"
@@ -2348,6 +2382,8 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
               {game.movingShield?.layer === layer ? "Cancel Shield Move" : `Move Shield ${index + 1}`}
             </button>
           ))}
+            </div>
+          </div>
         </section>
       </div>
       <div role="status" className="simple-game-status">
@@ -2373,8 +2409,15 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
       {doubleAttackSelected && <button className="spy-button" onClick={activateDoubleAttack}>Double Attack</button>}
       {game.extraAttack && !isComputer && <p className="double-attack-status">Double Attack ready · 2 attacks</p>}
       <section className={isMovingOut && !skipAttack ? "player-hand hand-highlighted" : "player-hand"} aria-labelledby="player-hand-heading">
-      <h2 id="player-hand-heading">Your hand</h2>
-      <div style={handLayout}>
+      <div className="player-hand-heading">
+        <h2 id="player-hand-heading">Your hand</h2>
+        {canToggleHandStack && (
+          <button type="button" className="side-panel-toggle" aria-pressed={choosingHandStack}
+            onClick={() => setStackFromHand(value => !value)}>Stack from hand</button>
+        )}
+      </div>
+      {choosingHandStack && <p className="touch-stack-hint">Tap a matching hand card, then tap its stack.</p>}
+      <div className="hand-row player-hand-row" style={compactBoard ? undefined : handLayout}>
         {game.player.map((card, index) => (
           <button
             key={card.type === "joker" ? card.color : `${card.rank}-${card.suit}`}
@@ -2387,7 +2430,7 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
             } : undefined}
             onDragEnd={() => { draggedCard.current = null; }}
             onFocus={() => inspect(card)}
-            aria-pressed={isShield(card) || isSpecial(card) || (canStackFromHand && !canDeployFromHand && hasStackTarget(card)) ? choosingHandCard === card : undefined}
+            aria-pressed={isShield(card) || isSpecial(card) || (canStackFromHand && (!canDeployFromHand || choosingHandStack || game.selectedStack === card) && hasStackTarget(card)) ? choosingHandCard === card : undefined}
             className={[
               choosingHandCard === card ? "simple-game-selected-shield" : inspected === card ? "card-inspected" : "",
               game.step === "draw" && game.drawnCard === card ? "drawn-hand-card" : "",
@@ -2395,6 +2438,13 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
             onClick={() => {
               inspect(card);
               if (!canUseHandCard(card)) return;
+              if (choosingHandStack) {
+                if (hasStackTarget(card)) {
+                  setStackFromHand(false);
+                  selectFromHand(card, "selectedStack");
+                }
+                return;
+              }
               if (isShield(card)) selectShield(card);
               else if (isSpecial(card)) selectFromHand(card, "selectedSpecial");
               else if (canStackFromHand && !canDeployFromHand && hasStackTarget(card)) selectFromHand(card, "selectedStack");
