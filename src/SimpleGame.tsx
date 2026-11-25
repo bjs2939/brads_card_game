@@ -1,12 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import CardFace from "./CardFace";
+import { Feedback, gameVersion } from "./PlaytestPanels";
+import { sandboxRetreatPlan, saveMatch } from "./playtest";
 import { useCardMotion } from "./useCardMotion";
 import { useAudioForeground, useGameSound, type GameSound } from "./useGameSound";
 import "./SimpleGame.css";
-import { dealSimpleGame, ranks } from "./game_engine/deck";
+import { createStandardDeck, dealSimpleGame, ranks } from "./game_engine/deck";
 import type { Card, Suit } from "./game_engine/types";
 
 export const simpleVersionTitle = "Brad's Card Game";
+
+const labCards: Card[] = [...createStandardDeck(), { type: "joker", color: "red" }, { type: "joker", color: "black" }];
+const labZones = {
+  player: "Your hand", computer: "Opponent hand", playerField: "Your battlefield", computerField: "Opponent battlefield",
+} as const;
+type LabZone = keyof typeof labZones;
+
+function labCardName(card: Card) {
+  return card.type === "joker" ? `${card.color} Joker` : `${card.rank} of ${card.suit}`;
+}
 
 const slotsPerRank = 3;
 const battlefieldSlots = slotsPerRank * 2;
@@ -60,10 +72,11 @@ type Game = ReturnType<typeof dealSimpleGame> & {
   computerField: (Unit | null)[];
   computerStacked?: boolean;
   lastComputerRetreat?: Card;
+  nextSandboxRetreat?: number;
   discardPile: Card[];
   phase: Side | "computer-move-out" | "computer-attack";
   step: TurnStep;
-  round: object;
+  round: { id: string; at: number };
   turn: number;
   drewCard: boolean;
   drawnCard?: Card;
@@ -592,7 +605,7 @@ function chooseComputerAttack(game: Game, difficulty: Difficulty, roll: number) 
   });
 
   const score = (option: typeof options[number]) => difficulty === "Hard" ? option.tacticalScore : option.power;
-  const attack = difficulty === "Easy" ? options[Math.floor(roll * options.length)]
+  const attack = (difficulty === "Easy" || difficulty === "Sandbox") ? options[Math.floor(roll * options.length)]
     : options.reduce<typeof options[number] | undefined>(
         (best, option) => !best || score(option) > score(best) ? option : best, undefined
       );
@@ -863,7 +876,7 @@ function startGame(): Game {
     discardPile: [],
     phase: "player",
     step: "draw",
-    round: {},
+    round: { id: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`, at: Date.now() },
     turn: 0,
     drewCard: false,
     selected: null,
@@ -1111,7 +1124,7 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
   );
 }
 
-export const difficulties = ["Easy", "Normal", "Hard"] as const;
+export const difficulties = ["Sandbox", "Easy", "Normal", "Hard"] as const;
 export type Difficulty = typeof difficulties[number];
 
 function describeMatchActions(previous: Game, current: Game): string[] {
@@ -1159,8 +1172,9 @@ function describeMatchActions(previous: Game, current: Game): string[] {
   return lines;
 }
 
-export default function SimpleGame({ difficulty, onBack, music, onResultChange }: {
+export default function SimpleGame({ difficulty, trainingGrounds = false, onBack, music, onResultChange }: {
   difficulty: Difficulty;
+  trainingGrounds?: boolean;
   onBack: () => void;
   music: { enabled: boolean; toggle: () => void; setDucked: (ducked: boolean) => void };
   onResultChange: (visible: boolean) => void;
@@ -1182,13 +1196,19 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
     return () => media.removeEventListener("change", onLayoutChange);
   }, []);
   useEffect(() => setStackFromHand(false), [game.turn]);
-  const [paused, setPaused] = useState(false);
+  const [pauseRequested, setPaused] = useState(false);
+  const [utilityOpen, setUtilityOpen] = useState(false);
+  const paused = pauseRequested || utilityOpen;
+  const labDialog = useRef<HTMLDialogElement>(null);
+  const [labZone, setLabZone] = useState<LabZone>("player");
+  const [labCard, setLabCard] = useState(0);
+  const [labRank, setLabRank] = useState<FieldRank>("back");
   const pauseDialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = pauseDialog.current;
-    if (paused && dialog && !dialog.open) dialog.showModal();
-    if (!paused && dialog?.open) dialog.close();
-  }, [paused]);
+    if (pauseRequested && dialog && !dialog.open) dialog.showModal();
+    if (!pauseRequested && dialog?.open) dialog.close();
+  }, [pauseRequested]);
   const [matchLog, setMatchLog] = useState<string[]>(["Match started."]);
   const [matchNote, setMatchNote] = useState("");
   const previousGame = useRef(game);
@@ -1205,7 +1225,7 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
       return;
     }
     const lines = describeMatchActions(previous, game);
-    if (lines.length) setMatchLog(entries => [...entries, ...lines]);
+    if (lines.length) setMatchLog(entries => [...entries, ...lines.map(line => `Turn ${Math.ceil(previous.turn / 2)} · ${line}`)]);
   }, [game]);
 
   useEffect(() => {
@@ -1223,6 +1243,16 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
   const latestDiscard = game.discardPile[game.discardPile.length - 1];
   const board = useCardMotion(game);
   const outcome = matchOutcome(game);
+  const modeLabel = trainingGrounds ? "Training Grounds" : `VS Computer · ${difficulty}`;
+  useEffect(() => {
+    if (game.turn <= 1 && !outcome) return;
+    saveMatch({
+      ...game.round,
+      difficulty: trainingGrounds ? "Training Grounds" : difficulty,
+      result: outcome || "In progress / left match",
+      lines: matchLog,
+    });
+  }, [difficulty, trainingGrounds, game.round, game.turn, matchLog, outcome]);
   const resultHeading = useRef<HTMLHeadingElement>(null);
   const immunityDialog = useRef<HTMLDialogElement>(null);
   const stackTargetDialog = useRef<HTMLDialogElement>(null);
@@ -1281,7 +1311,7 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
 
   const deckWarning = showingCombatEffect ? undefined : game.deckWarning;
   const warningActive = deckWarning !== undefined;
-  const [turnTimerEnabled, setTurnTimerEnabled] = useState(true);
+  const [turnTimerEnabled, setTurnTimerEnabled] = useState(false);
   const [phaseSeconds, setPhaseSeconds] = useState(30);
   const phaseClock = useRef({ round: game.round, turn: game.turn, step: game.step, remaining: 30_000 });
   const timedPhase = turnTimerEnabled && game.phase === "player" && game.step !== "draw" && !outcome &&
@@ -1561,6 +1591,20 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
         }
 
         if (current.phase !== "computer-attack") return current;
+        if (difficulty === "Sandbox") {
+          const candidate = current.computerField.find(Boolean);
+          const plan = sandboxRetreatPlan(current.turn, current.nextSandboxRetreat, Boolean(candidate), attackRoll);
+          const unit = plan.retreat ? candidate : null;
+          return drawForTurn({
+            ...current,
+            phase: "player",
+            nextSandboxRetreat: plan.nextRetreat,
+            computer: unit ? [...current.computer, unit.card, ...(unit.shields ?? []).map(layer => layer.card)] : current.computer,
+            computerField: unit ? current.computerField.map(entry => entry === unit ? null : entry) : current.computerField,
+            result: unit ? "Sandbox opponent retreated a card and ended its turn." : "Sandbox opponent ended its turn.",
+            sound: unit ? { cue: "play" } : current.sound,
+          }, "player");
+        }
         const attackDifficulty = current.computerStacked ? "Hard" : difficulty;
         const { attack, hasProductiveAttack } = chooseComputerAttack(current, attackDifficulty, attackRoll);
         const { attacker, target } = attack ?? { attacker: -1, target: -1 };
@@ -1945,6 +1989,37 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
     return () => window.clearTimeout(timer);
   }, [game.pendingAttack, paused]);
 
+  function editLab(removeIndex?: number) {
+    setGame(current => {
+      if (!trainingGrounds || current.phase !== "player" || current.step === "draw" ||
+          current.pendingAttack || current.attackAnimation || current.specialStrike || current.jokerExplosion) return current;
+      const isHand = labZone === "player" || labZone === "computer";
+      if (removeIndex !== undefined) {
+        if (!current[labZone][removeIndex]) return current;
+        const result = "Lab removed a card.";
+        return isHand
+          ? { ...current, [labZone]: current[labZone].filter((_, i) => i !== removeIndex), result }
+          : { ...current, [labZone]: current[labZone].map((unit, i) => i === removeIndex ? null : unit), result };
+      }
+      const card = labCards[labCard];
+      const matches = (other: Card) => labCardName(card) === labCardName(other);
+      const onBoard = [...current.playerField, ...current.computerField].some(unit =>
+        unit && (matches(unit.card) || unit.shields?.some(layer => matches(layer.card))));
+      if (onBoard || [...current.player, ...current.computer].some(matches)) {
+        return { ...current, result: "That card is already in play. Remove it first or choose another card." };
+      }
+      const next = { ...current, drawPile: current.drawPile.filter(card => !matches(card)),
+        discardPile: current.discardPile.filter(card => !matches(card)), result: "Lab added a card." };
+      if (isHand) return { ...next, [labZone]: [...current[labZone], card] };
+      if (!canDeploy(card)) return { ...current, result: "Add specialty cards to a hand." };
+      const slot = openLanes(current[labZone], labRank)[0];
+      if (slot === undefined) return { ...current, result: "That rank is full." };
+      const field = [...current[labZone]];
+      field[slot] = { ...deploy(card), revealed: true };
+      return { ...next, [labZone]: field };
+    });
+  }
+
   function getTurnMessage() {
     if (skipAttack) return "No attack available. Ending turn.";
     if (jokerOnlyTurn) return "Only a Joker left. Ending turn...";
@@ -2035,6 +2110,33 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
 
   return (
     <main ref={board} className="simple-game-table" data-paused={paused} onClickCapture={unlockSound}>
+      <Feedback floating onOpenChange={setUtilityOpen}
+        context={`Version ${gameVersion} · ${modeLabel} · Turn ${Math.ceil(game.turn / 2)} · Deck ${game.drawPile.length} · Player health ${health(game.player, game.playerField)} · Opponent health ${health(game.computer, game.computerField)}`} />
+      {trainingGrounds && (
+        <dialog ref={labDialog} className="game-mode-picker playtest-dialog" aria-labelledby="lab-title"
+          onClose={() => setUtilityOpen(false)}>
+          <h2 id="lab-title">Training Grounds Lab</h2>
+          <label>Location<select value={labZone} onChange={event => setLabZone(event.currentTarget.value as LabZone)}>
+            {Object.entries(labZones).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select></label>
+          {(labZone === "playerField" || labZone === "computerField") && (
+            <label>Rank<select value={labRank} onChange={event => setLabRank(event.currentTarget.value as FieldRank)}>
+              <option value="front">Front</option><option value="back">Back</option>
+            </select></label>
+          )}
+          <label>Card<select value={labCard} onChange={event => setLabCard(Number(event.currentTarget.value))}>
+            {labCards.map((card, index) => <option key={index} value={index}>{labCardName(card)}</option>)}
+          </select></label>
+          <button type="button" onClick={() => editLab()}>Add card</button>
+          <details><summary>Remove a card from this location</summary>
+            {game[labZone].map((entry, index) => entry && (
+              <button key={index} type="button" onClick={() => editLab(index)}>Remove {labCardName("card" in entry ? entry.card : entry)}</button>
+            ))}
+          </details>
+          <p role="status">{game.result}</p>
+          <button type="button" onClick={() => labDialog.current?.close()}>Close Lab</button>
+        </dialog>
+      )}
       <dialog ref={pauseDialog} className="game-mode-picker" aria-labelledby="pause-title"
         onCancel={event => { event.preventDefault(); setPaused(false); }}>
         <h2 id="pause-title">Game paused</h2>
@@ -2173,7 +2275,7 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
         </aside>
       )}
       <h1>{simpleVersionTitle}</h1>
-      <div>VS Computer · {difficulty}</div>
+      <div>{modeLabel}</div>
       <div className="turn-steps" aria-label="Turn phases">
         {(game.turn <= 2 ? (["draw", "move-out"] as const)
           : (["draw", "move-up", "move-out", "attack"] as const))
@@ -2345,6 +2447,12 @@ export default function SimpleGame({ difficulty, onBack, music, onResultChange }
             <p role="timer" aria-label="Time left in this phase" className="phase-timer" data-low={phaseSeconds <= 5}>
               0:{String(phaseSeconds).padStart(2, "0")}
             </p>
+          )}
+          {trainingGrounds && (
+            <button type="button" className="pause-button" disabled={!canEndTurn} onClick={() => {
+              labDialog.current?.showModal();
+              setUtilityOpen(true);
+            }}>Lab</button>
           )}
           <button className="pause-button" onClick={() => setPaused(true)}>Pause</button>
           <button className="simple-game-end-turn" disabled={!canEndTurn} onClick={endTurn}>END TURN</button>

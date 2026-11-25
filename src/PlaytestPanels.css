@@ -1,0 +1,88 @@
+.playtest-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.65rem 0;
+}
+
+.playtest-button,
+.playtest-dialog :is(button, a) {
+  padding: 0.43rem 0.68rem;
+  border: 1px solid #9d8054;
+  border-radius: 0.4rem;
+  background: #252c31;
+  color: #ffe5b1;
+  font: 700 0.82rem/1.2 system-ui, sans-serif;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.playtest-button:disabled { cursor: default; opacity: 0.65; }
+.playtest-button:focus-visible,
+.playtest-dialog :is(button, a, input, textarea, select):focus-visible {
+  outline: 2px solid #ffd47c;
+  outline-offset: 2px;
+}
+
+.feedback-floating {
+  position: fixed;
+  z-index: 9;
+  bottom: 0.75rem;
+  left: 0.6rem;
+}
+
+.playtest-dialog {
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  text-align: left;
+}
+
+.playtest-dialog label {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.6rem 0;
+}
+
+.playtest-dialog .playtest-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
+.playtest-dialog :is(input:not([type="checkbox"]), textarea, select) {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.45rem;
+  border: 1px solid #8299a9;
+  border-radius: 0.3rem;
+  background: #edf3fb;
+  color: #162536;
+  font: 1rem system-ui, sans-serif;
+}
+
+.playtest-dialog pre {
+  max-height: 13rem;
+  overflow: auto;
+  padding: 0.65rem;
+  border: 1px solid #54708b;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.playtest-dialog details {
+  margin: 0.55rem 0;
+  padding: 0.4rem;
+  border: 1px solid #54708b;
+  border-radius: 0.35rem;
+}
+
+.playtest-dialog details button { margin: 0.25rem 0.2rem 0 0; }
+
+@media (max-width: 720px) {
+  .feedback-floating {
+    bottom: calc(0.4rem + env(safe-area-inset-bottom));
+    left: 0.45rem;
+    min-height: 2.65rem;
+    padding-inline: 0.35rem;
+  }
+}

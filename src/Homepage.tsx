@@ -1,11 +1,13 @@
 import { useRef, useState } from "react";
 import CardFace from "./CardFace";
+import { Feedback, MatchHistory, gameVersion } from "./PlaytestPanels";
 import SimpleGame, { difficulties, simpleVersionTitle, type Difficulty } from "./SimpleGame";
 import { useBackgroundMusic } from "./useGameSound";
 import "./Homepage.css";
 
 export default function HomePage() {
   const [difficulty, setDifficulty] = useState<Difficulty | null>(null);
+  const [trainingGrounds, setTrainingGrounds] = useState(false);
   const [chooseDifficulty, setChooseDifficulty] = useState(false);
   const [showingResult, setShowingResult] = useState(false);
   const modePicker = useRef<HTMLDialogElement>(null);
@@ -13,11 +15,19 @@ export default function HomePage() {
 
   function goHome() {
     setShowingResult(false);
+    setTrainingGrounds(false);
     setDifficulty(null);
   }
 
+  function launchMatch(level: Difficulty, training = false) {
+    modePicker.current?.close();
+    music.start("battle");
+    setTrainingGrounds(training);
+    setDifficulty(level);
+  }
+
   if (difficulty) {
-    return <SimpleGame difficulty={difficulty} onBack={goHome} music={music} onResultChange={setShowingResult} />;
+    return <SimpleGame difficulty={difficulty} trainingGrounds={trainingGrounds} onBack={goHome} music={music} onResultChange={setShowingResult} />;
   }
 
   return (
@@ -34,6 +44,11 @@ export default function HomePage() {
           <div className="game-home-actions">
             <button className="game-home-primary" aria-haspopup="dialog" onClick={() => { setChooseDifficulty(false); modePicker.current?.showModal(); }}>Play Brad’s Card Game</button>
           </div>
+          <div className="playtest-actions">
+            <button type="button" className="playtest-button" onClick={() => launchMatch("Sandbox", true)}>Training Grounds</button>
+            <Feedback context={`Version ${gameVersion} · Main menu`} />
+            <MatchHistory />
+          </div>
           <button className="game-home-music" data-music-toggle aria-pressed={music.enabled} onClick={music.toggle}>
             {music.enabled ? "Mute Music" : "Play Music"}
           </button>
@@ -43,13 +58,10 @@ export default function HomePage() {
         <h2 id="game-mode-title">{chooseDifficulty ? "Choose a difficulty" : "Choose a game mode"}</h2>
         <div className="game-mode-options">
           {chooseDifficulty ? difficulties.map(level => (
-            <button key={level} className={level === "Normal" ? "game-home-primary" : undefined} onClick={() => {
-              modePicker.current?.close();
-              music.start("battle");
-              setDifficulty(level);
-            }}>{level}</button>
+            <button key={level} className={level === "Normal" ? "game-home-primary" : undefined} onClick={() => launchMatch(level)}>{level}{level === "Sandbox" && <small>The opponent never attacks.</small>}</button>
           )) : (
             <>
+              <button disabled>Campaign <small>Coming soon</small></button>
               <button className="game-home-primary" onClick={() => setChooseDifficulty(true)}>VS Computer</button>
               <button disabled>Online Matchmaking <small>Coming soon</small></button>
               <button disabled>VS Friend <small>Coming soon</small></button>
