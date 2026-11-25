@@ -1,0 +1,12 @@
+CREATE TABLE IF NOT EXISTS feedback (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  submitted_at TEXT NOT NULL,
+  issue INTEGER UNIQUE
+);
+CREATE TABLE IF NOT EXISTS feedback_limits (
+  key TEXT PRIMARY KEY,
+  bucket INTEGER NOT NULL,
+  count INTEGER NOT NULL
+);

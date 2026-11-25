@@ -79,3 +79,47 @@
 .game-mode-options button { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; text-align: left; }
 .game-mode-options small { font-size: 0.72em; font-weight: 500; }
 .game-home .game-mode-back { margin-top: 1rem; background: transparent; }
+
+.difficulty-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.difficulty-info {
+  position: relative;
+}
+
+.game-mode-options .difficulty-info button {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border-radius: 50%;
+  font-family: Georgia, serif;
+}
+
+.difficulty-info [role="tooltip"] {
+  display: none;
+  position: absolute;
+  z-index: 1;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  width: max-content;
+  max-width: min(15rem, 60vw);
+  padding: 0.5rem 0.7rem;
+  border: 1px solid #a58a54;
+  border-radius: 0.45rem;
+  background: #10292c;
+  color: #fff3d5;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  pointer-events: none;
+}
+
+.difficulty-info:hover [role="tooltip"],
+.difficulty-info:focus-within [role="tooltip"] {
+  display: block;
+}

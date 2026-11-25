@@ -12,6 +12,11 @@ export function Feedback({ context, floating = false, onOpenChange }: {
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
   const [diagnostics, setDiagnostics] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [sending, setSending] = useState(false);
+  const requestId = useRef("");
+  const feedbackEndpoint = import.meta.env.VITE_FEEDBACK_ENDPOINT;
   const [preview, setPreview] = useState<ReturnType<typeof createFeedbackIssue>>();
   const [status, setStatus] = useState("");
 
@@ -23,31 +28,51 @@ export function Feedback({ context, floating = false, onOpenChange }: {
     <dialog ref={dialog} className="game-mode-picker playtest-dialog" aria-labelledby="feedback-title"
       onClose={() => onOpenChange?.(false)}>
       <h2 id="feedback-title">Help improve the game</h2>
-      <p>Reports posted on GitHub are public. Leave out contact details and review any screenshot before attaching it on GitHub.</p>
+      <p>Your name and email are stored privately so the developer can reply. The report below will be public on GitHub. Keep personal details out of the subject and description.</p>
       {preview ? <>
-        <h3>Review your report</h3>
+        <h3>Review your public report</h3>
         <p><strong>{preview.title}</strong></p>
         <pre>{preview.body}</pre>
-        {preview.needsCopy && <p>Copy your report, then paste it into GitHub.</p>}
         <div className="playtest-actions">
-          <button type="button" onClick={() => {
-            if (!navigator.clipboard) { setStatus("You can select and copy the preview text."); return; }
-            void navigator.clipboard.writeText(preview.body).then(() => setStatus("Report copied."),
-              () => setStatus("Copy failed. You can select and copy the preview text."));
-          }}>Copy report</button>
-          <a href={preview.url} target="_blank" rel="noopener noreferrer">Continue to GitHub</a>
-          <button type="button" onClick={() => { setPreview(undefined); setStatus(""); }}>Edit report</button>
+          <button type="button" disabled={sending || !feedbackEndpoint} onClick={async () => {
+            setSending(true);
+            setStatus("Sending feedback…");
+            try {
+              const response = await fetch(feedbackEndpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id: requestId.current, name, email, category, subject, description, context: diagnostics ? context : undefined }),
+              });
+              const result = await response.json();
+              if (!response.ok || !Number.isSafeInteger(result.issue)) throw new Error("Submission failed");
+              setPreview(undefined);
+              setName("");
+              setEmail("");
+              setSubject("");
+              setDescription("");
+              setDiagnostics(false);
+              setStatus(`Feedback sent. Reference #${result.issue}.`);
+            } catch {
+              setStatus("Feedback could not be sent. Your report is still here. Please try again.");
+            } finally {
+              setSending(false);
+            }
+          }}>{sending ? "Sending…" : "Send feedback"}</button>
+          <button type="button" disabled={sending} onClick={() => { setPreview(undefined); setStatus(""); }}>Edit report</button>
         </div>
-        <p role="status">{status}</p>
+        <p role="status">{feedbackEndpoint ? status : "Direct feedback is awaiting server setup."}</p>
       </> : <form onSubmit={event => {
         event.preventDefault();
-        if (!subject.trim() || !description.trim()) { setStatus("Enter both a subject and a description."); return; }
+        if (!name.trim() || !subject.trim() || !description.trim()) { setStatus("Complete all required fields."); return; }
         setStatus("");
-        setPreview(createFeedbackIssue(category, subject, description, diagnostics ? context : undefined));
+        requestId.current = crypto.randomUUID();
+        setPreview(createFeedbackIssue(category, subject, description, diagnostics ? context : undefined, name.trim()));
       }}>
         <label>Category<select value={category} onChange={event => setCategory(event.currentTarget.value)}>
           {feedbackCategories.map(value => <option key={value}>{value}</option>)}
         </select></label>
+        <label>Name<input required autoComplete="name" maxLength={100} value={name} onChange={event => setName(event.currentTarget.value)} /></label>
+        <label>Return email<input required type="email" autoComplete="email" maxLength={254} value={email} onChange={event => setEmail(event.currentTarget.value)} /></label>
         <label>Subject<input required maxLength={100} value={subject} onChange={event => setSubject(event.currentTarget.value)} /></label>
         <label>Description<textarea required maxLength={1500} rows={5} value={description}
           onChange={event => setDescription(event.currentTarget.value)} /></label>

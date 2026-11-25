@@ -5,6 +5,13 @@ import SimpleGame, { difficulties, simpleVersionTitle, type Difficulty } from ".
 import { useBackgroundMusic } from "./useGameSound";
 import "./Homepage.css";
 
+const difficultyDescriptions: Record<Difficulty, string> = {
+  Sandbox: "The opponent never attacks.",
+  Easy: "A gentler opponent with warnings before known immune attacks.",
+  Normal: "A balanced opponent for a standard match.",
+  Hard: "Even the best players will struggle.",
+};
+
 export default function HomePage() {
   const [difficulty, setDifficulty] = useState<Difficulty | null>(null);
   const [trainingGrounds, setTrainingGrounds] = useState(false);
@@ -58,7 +65,14 @@ export default function HomePage() {
         <h2 id="game-mode-title">{chooseDifficulty ? "Choose a difficulty" : "Choose a game mode"}</h2>
         <div className="game-mode-options">
           {chooseDifficulty ? difficulties.map(level => (
-            <button key={level} className={level === "Normal" ? "game-home-primary" : undefined} onClick={() => launchMatch(level)}>{level}{level === "Sandbox" && <small>The opponent never attacks.</small>}</button>
+            <div className="difficulty-row" key={level}>
+              <button className={level === "Normal" ? "game-home-primary" : undefined} onClick={() => launchMatch(level)}>{level}</button>
+              <div className="difficulty-info">
+                <button type="button" aria-label={`About ${level} difficulty`} aria-describedby={`difficulty-${level}`}
+                  onClick={event => event.currentTarget.focus()}>i</button>
+                <span role="tooltip" id={`difficulty-${level}`}>{difficultyDescriptions[level]}</span>
+              </div>
+            </div>
           )) : (
             <>
               <button disabled>Campaign <small>Coming soon</small></button>

@@ -4,15 +4,16 @@ export const feedbackCategories = [
   "AI Behavior", "Visual Effects", "Sound / Music", "Performance", "Dislike / Complaint", "Positive Feedback", "Other",
 ] as const;
 
-const issueUrl = "https://github.com/bjs2939/brads_card_game/issues/new";
-
-export function createFeedbackIssue(category: string, subject: string, description: string, context?: string) {
+export function createFeedbackIssue(category: string, subject: string, description: string, context?: string, name?: string) {
   const redactEmail = (value: string) => value.trim().replace(/[\w.!#$%&'*+/=?^_`{|}~-]+@[a-z\d.-]+\.[a-z]{2,}/gi, "[email removed]");
+  const redact = (value: string) => {
+    const cleaned = redactEmail(value);
+    return name ? cleaned.replace(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), "[name removed]") : cleaned;
+  };
   const safeCategory = feedbackCategories.find(value => value === category) ?? "Other";
-  const title = `[${safeCategory}] ${redactEmail(subject)}`;
-  const body = `${redactEmail(description)}${context ? `\n\n### Optional game information\n${context}` : ""}`;
-  const url = `${issueUrl}?${new URLSearchParams({ title, body })}`;
-  return { title, body, url: url.length <= 7500 ? url : issueUrl, needsCopy: url.length > 7500 };
+  const title = `[${safeCategory}] ${redact(subject)}`;
+  const body = `${redact(description)}${context ? `\n\n### Optional game information\n${redact(context)}` : ""}`;
+  return { title, body };
 }
 
 export type MatchRecord = { id: string; difficulty: string; at: number; result: string; lines: string[] };

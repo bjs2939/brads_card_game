@@ -2,21 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createFeedbackIssue, loadHistory, sandboxRetreatPlan, saveMatch } from "../src/playtest.ts";
 
-test("feedback strips email addresses and uses an explicit public GitHub draft", () => {
-  const issue = createFeedbackIssue("Bug / Glitch", "Bug from me@example.org", "Contact me@example.org", "Deck 5");
-  const url = new URL(issue.url);
-  assert.equal(url.pathname, "/bjs2939/brads_card_game/issues/new");
-  assert.equal(url.searchParams.get("title"), "[Bug / Glitch] Bug from [email removed]");
-  assert.match(url.searchParams.get("body"), /Contact \[email removed\]/);
+test("public feedback redacts contact details and includes optional diagnostics", () => {
+  const issue = createFeedbackIssue("Bug / Glitch", "Bug from Alex (tester)", "Contact me@example.org", "Deck 5", "Alex (tester)");
+  assert.equal(issue.title, "[Bug / Glitch] Bug from [name removed]");
+  assert.match(issue.body, /Contact \[email removed\]/);
   assert.match(issue.body, /Deck 5/);
-  assert.doesNotMatch(issue.title + issue.body, /me@example\.org/);
-});
-
-test("large feedback drafts have a copy-and-paste fallback", () => {
-  const issue = createFeedbackIssue("Feature Request", "Long draft", "※".repeat(1500));
-  assert.equal(issue.needsCopy, true);
-  assert.equal(new URL(issue.url).search, "");
-  assert.equal(issue.body.length, 1500);
 });
 
 test("match history recovers from invalid storage and caps matches and actions", () => {
