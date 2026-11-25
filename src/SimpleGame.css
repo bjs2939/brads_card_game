@@ -710,7 +710,20 @@
   flex-direction: column;
   align-self: stretch;
 }
-.simple-game-board-right .discard-controls { margin-bottom: 0.65rem; }
+.turn-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: 0.65rem;
+}
+
+.turn-controls > button {
+  width: auto;
+  min-height: 2.5rem;
+  margin: 0;
+}
 .simple-game-board-right .card-details { margin-top: auto; }
 
 .card-stackable { font-weight: 700; }
@@ -1418,7 +1431,7 @@
   .simple-game-table {
     --hand-card-width: clamp(2.65rem, 11vw, 3.65rem);
     --field-card-width: clamp(3.6rem, 21vw, 6rem);
-    padding: 0.5rem 0.45rem calc(9rem + env(safe-area-inset-bottom));
+    padding: 0.5rem 0.45rem calc(4rem + env(safe-area-inset-bottom));
   }
   .simple-game-table > h1 {
     font-size: clamp(1.4rem, 5.6vw, 2rem);
@@ -1490,30 +1503,15 @@
   .match-log { max-height: 8rem; }
   .match-log-form input { font-size: 16px; }
 
-  .simple-game-board-right .discard-controls {
-    position: fixed;
-    z-index: 8;
-    inset: auto 0 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    margin: 0;
-    padding: 0.4rem 0.5rem calc(0.4rem + env(safe-area-inset-bottom)) 5.9rem;
-    border-top: 1px solid #516f8b;
-    background: #10233a;
-    box-shadow: 0 -0.35rem 1.25rem #09182c80;
-  }
-  .discard-controls > button {
+  .turn-controls > button {
     width: auto;
     min-height: 2.65rem;
     margin: 0;
     padding-inline: 0.5rem;
     font-size: 0.75rem;
   }
-  .discard-controls > .phase-timer { font-size: 0.95rem; }
-  .discard-controls > .simple-game-end-turn { min-width: 5.35rem; }
+  .turn-controls > .phase-timer { font-size: 0.95rem; }
+  .turn-controls > .simple-game-end-turn { min-width: 5.35rem; }
 
   .player-hand { padding-inline: 0.25rem; }
   .player-hand-heading {

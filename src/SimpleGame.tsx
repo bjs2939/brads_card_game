@@ -2434,42 +2434,42 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, onBack
             <span>TURN {Math.ceil(game.turn / 2)} · {isComputer ? "ENEMY" : "PLAYER"} — {skipAttack ? "ENDING TURN" : turnSteps[game.step].toUpperCase()}</span>
           </div>
           {ownRows}
+          <div className="turn-controls" role="group" aria-label="Turn controls">
+            {!isComputer && nextStep && (
+              <button className="simple-game-next-step" onClick={advanceStep}>
+                Next: {turnSteps[nextStep]}
+              </button>
+            )}
+            {timedPhase && (
+              <p role="timer" aria-label="Time left in this phase" className="phase-timer" data-low={phaseSeconds <= 5}>
+                0:{String(phaseSeconds).padStart(2, "0")}
+              </p>
+            )}
+            {trainingGrounds && (
+              <button type="button" className="pause-button" disabled={!canEndTurn} onClick={() => {
+                labDialog.current?.showModal();
+                setUtilityOpen(true);
+              }}>Lab</button>
+            )}
+            <button className="pause-button" onClick={() => setPaused(true)}>Pause</button>
+            <button className="simple-game-end-turn" disabled={!canEndTurn} onClick={endTurn}>END TURN</button>
+            {canStackSelected && (
+              <button
+                aria-pressed={game.movingStack}
+                onClick={() => setGame(current => ({ ...current, movingStack: !current.movingStack }))}
+              >
+                {game.movingStack ? "Cancel Stack" : "Stack"}
+              </button>
+            )}
+            <button className="retreat-button" disabled={!canReallocateShields || !inspectedOwnUnit}
+              title={inspectedOwnUnit ? "Return this card to your hand and end your turn" : "Select one of your battlefield cards"}
+              onClick={() => { if (inspectedOwnUnit) retreat(inspectedOwnUnit.card); }}>
+              Retreat
+            </button>
+          </div>
         </section>
 
-        <section className="simple-game-board-right" aria-label="Discard, turn controls, and card details">
-          <div className="discard-controls" role="group" aria-label="Turn controls">
-          {!isComputer && nextStep && (
-            <button className="simple-game-next-step" onClick={advanceStep}>
-              Next: {turnSteps[nextStep]}
-            </button>
-          )}
-          {timedPhase && (
-            <p role="timer" aria-label="Time left in this phase" className="phase-timer" data-low={phaseSeconds <= 5}>
-              0:{String(phaseSeconds).padStart(2, "0")}
-            </p>
-          )}
-          {trainingGrounds && (
-            <button type="button" className="pause-button" disabled={!canEndTurn} onClick={() => {
-              labDialog.current?.showModal();
-              setUtilityOpen(true);
-            }}>Lab</button>
-          )}
-          <button className="pause-button" onClick={() => setPaused(true)}>Pause</button>
-          <button className="simple-game-end-turn" disabled={!canEndTurn} onClick={endTurn}>END TURN</button>
-          {canStackSelected && (
-            <button
-              aria-pressed={game.movingStack}
-              onClick={() => setGame(current => ({ ...current, movingStack: !current.movingStack }))}
-            >
-              {game.movingStack ? "Cancel Stack" : "Stack"}
-            </button>
-          )}
-          <button className="retreat-button" disabled={!canReallocateShields || !inspectedOwnUnit}
-            title={inspectedOwnUnit ? "Return this card to your hand and end your turn" : "Select one of your battlefield cards"}
-            onClick={() => { if (inspectedOwnUnit) retreat(inspectedOwnUnit.card); }}>
-            Retreat
-          </button>
-          </div>
+        <section className="simple-game-board-right" aria-label="Discard and card details">
           <div className="card-info-panel">
             <button type="button" className="side-panel-toggle" aria-expanded={showCardInfo}
               aria-controls="card-info-content" onClick={() => setShowCardInfo(open => !open)}>Card details</button>
