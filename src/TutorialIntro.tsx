@@ -89,6 +89,19 @@ export const tutorialLessons = {
     { speaker: "garrison", text: "Hearts gain +1 power when attacking Spades. That makes your 6 of Hearts hit for 7, enough to defeat their 7 of Spades. A tie goes to the attacker." },
     { speaker: "locke", text: "And our 6 can shoot from the back rank. Select it, then select the revealed 7. This time we actually know what we’re shooting at." },
   ],
+  "free-shield": [
+    { speaker: "garrison", text: "That 10 of Diamonds broke your 4’s built-in shield. Every 4 gets one free shield, so it can survive a hit that would otherwise defeat it." },
+    { speaker: "locke", text: "A 4 can’t hit particularly hard, but it’s excellent at stalling. Finally, a military job I’m qualified for." },
+    { speaker: "garrison", text: "We’ll skip Move Up and go straight to Move Out. Deploy your 2 of Hearts. Twos are halflings, and they can defeat dragons, even a 10. Dragons can’t defeat them with a normal attack either." },
+  ],
+  "halfling-shield": [
+    { speaker: "locke", text: "Select the Jack of Spades from your hand, then select your deployed 2 of Hearts. The Jack becomes a shield. Let’s keep our dragon slayer in one piece until it gets there." },
+    { speaker: "garrison", text: "Once the shield is attached, end your turn. Try to look as though that was the plan all along." },
+  ],
+  "slay-dragon": [
+    { speaker: "garrison", text: "The dragon took our 4. Sacrifices are made in battle. Move your shielded 2 of Hearts to the front rank." },
+    { speaker: "locke", text: "Then select the 2 again and attack the 10 of Diamonds. Small soldier, large dragon. Terrible odds, if you’re the dragon." },
+  ],
 } satisfies Record<string, readonly DialogueLine[]>;
 
 export function TutorialBattleDialogue({ lesson, audio, onDone }: {
