@@ -69,6 +69,7 @@
 .tutorial-portrait[data-speaking="true"] { opacity: 1; }
 .tutorial-portrait img { display: block; width: 100%; transform: scaleX(-1); }
 .tutorial-portrait-locke img { transform: scale(-0.94, 0.94); transform-origin: center bottom; }
+.tutorial-portrait-garrison img { transform: translateY(13%) scale(-1.12, 1.12); transform-origin: center bottom; }
 .tutorial-dialogue {
   padding: clamp(0.9rem, 3vw, 1.4rem);
   border: 1px solid #b89761;
