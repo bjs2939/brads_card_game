@@ -1832,3 +1832,37 @@
   margin: 0 0 0.85rem;
   color: #ffda8d;
 }
+
+.simple-game-stack-card:has(> .dragon-summon),
+.attack-cutaway-target:has(> .dragon-summon) {
+  isolation: isolate;
+  animation: dragon-summon-glow 900ms ease-out both;
+  border-radius: 0.5rem;
+}
+.dragon-summon {
+  position: absolute;
+  z-index: -1;
+  inset: 50% auto auto 50%;
+  width: clamp(9rem, 260%, 18rem);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  background-size: 800% 100%;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  animation: dragon-summon-frames 910ms steps(7, end) both;
+}
+@keyframes dragon-summon-frames {
+  from { background-position: 0 0; }
+  to { background-position: 100% 0; }
+}
+@keyframes dragon-summon-glow {
+  0%, 100% { box-shadow: 0 0 0 transparent; }
+  22% { box-shadow: 0 0 1.65rem 0.35rem #ff7e26; }
+  50% { box-shadow: 0 0 1rem 0.2rem #e43d16a8; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dragon-summon { animation: none; background-position: 57.142857% 0; opacity: 0.5; }
+  .simple-game-stack-card:has(> .dragon-summon),
+  .attack-cutaway-target:has(> .dragon-summon) { animation: none; }
+}
