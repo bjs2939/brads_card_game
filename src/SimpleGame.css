@@ -1762,3 +1762,37 @@
     opacity: 0.6;
   }
 }
+
+.discard-pile[data-garbage-active] {
+  border-radius: 0.55rem;
+  background: #41245b;
+  box-shadow: 0 0 1.2rem #b273f5a8, inset 0 0 1.1rem #a253ea70;
+  padding: 0.5rem;
+}
+.garbage-collection-status {
+  color: #e9ccff;
+  font: 650 0.75rem/1.4 system-ui, sans-serif;
+}
+.turn-controls .garbage-collection-button {
+  color: #fff0ff;
+  background: #53297c;
+  border: 1px solid #cd9bff;
+}
+.garbage-collection-announcement {
+  position: fixed;
+  z-index: 12;
+  top: 42%;
+  left: 50%;
+  width: max-content;
+  max-width: calc(100% - 2rem);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  border: 1px solid #d5a3ff;
+  border-radius: 0.65rem;
+  padding: 0.6rem 0.85rem;
+  background: #2f1748;
+  color: #f6e4ff;
+  box-shadow: 0 0 1.4rem #ba72f5bd;
+  font: 850 clamp(1rem, 4vw, 2rem)/1.2 system-ui, sans-serif;
+  text-align: center;
+}

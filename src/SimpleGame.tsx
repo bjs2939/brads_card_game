@@ -925,7 +925,29 @@ function playerStepAfterDraw(game: Game): TurnStep {
   return canMoveUp(game.playerField) ? "move-up" : moveOutOrAttack(game);
 }
 
+function isCollector(unit: Unit | null): unit is Unit {
+  return unit?.card.type === "standard" && unit.card.rank === "3";
+}
+
+function hasGarbageCollection(field: Field) {
+  return field.filter(unit => isCollector(unit) && unit.revealed).length >= 3;
+}
+
 function drawForTurn(game: Game, side: "player" | "computer"): Game {
+  const collector = side === "player" ? "computer" : "player";
+  const field = collector === "player" ? game.playerField : game.computerField;
+  // Discards are appended chronologically, so index zero is the bottom of the pile.
+  const [oldest, ...remainingDiscards] = game.discardPile;
+  if (game.turn > 0 && oldest && hasGarbageCollection(field)) {
+    const actor = collector === "player" ? "You recovered" : "The computer recovered";
+    game = {
+      ...game,
+      [collector]: [...game[collector], oldest],
+      discardPile: remainingDiscards,
+      result: [game.result, `Garbage Collection: ${actor} ${labCardName(oldest)} from the bottom of the discard pile.`]
+        .filter(Boolean).join(" "),
+    };
+  }
   if (matchOutcome(game)) return game;
   const [card, ...drawPile] = game.drawPile;
   const backRankAtTurnStart = side === "player"
@@ -1034,6 +1056,7 @@ function CardDetails({ card, layers }: { card: Card | null | undefined; layers: 
         abilities.push("Double Attack: discard this Queen from your hand to attack twice this turn.");
         break;
       case "2": abilities.push("Defeats 10s and is immune to their attacks."); break;
+      case "3": abilities.push("Garbage Collection: three revealed 3s on your field recover the oldest discarded card at the end of your turn."); break;
       case "4": abilities.push("Built-in shield: absorbs the first non-immune regular hit."); break;
       case "5": abilities.push("Joker immunity: survives a Joker trap without losing its shields."); break;
       case "6": abilities.push("Range: 2. Attack the enemy front rank from your back rank, or reach the enemy back rank from your front rank past occupied slots."); break;
@@ -1367,7 +1390,7 @@ function describeMatchActions(previous: Game, current: Game): string[] {
   return lines;
 }
 
-export default function SimpleGame({ difficulty, trainingGrounds = false, tutorial = false, tutorialAudio = null, onBack, music, onResultChange }: {
+export default function SimpleGame({ difficulty, trainingGrounds = false, tutorial = false, tutorialAudio = null, onBack, music, onResultChange, onGarbageMusicChange }: {
   difficulty: Difficulty;
   trainingGrounds?: boolean;
   tutorial?: boolean;
@@ -1375,6 +1398,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   onBack: () => void;
   music: { enabled: boolean; toggle: () => void; setDucked: (ducked: boolean) => void };
   onResultChange: (visible: boolean) => void;
+  onGarbageMusicChange: (active: boolean) => void;
 }) {
   const [game, setGame] = useState(() => startGame(tutorial));
   const [matchTips, setMatchTips] = useState(() => shuffleDeck(opponentTips));
@@ -1712,6 +1736,15 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     window.speechSynthesis?.cancel();
   }, []);
   const { canPlayAudio: canSpeak } = useAudioForeground(stopSpeech);
+  const playerCollects = hasGarbageCollection(game.playerField);
+  const opponentCollects = hasGarbageCollection(game.computerField);
+  const collectionActive = playerCollects || opponentCollects;
+  const previousCollectors = useRef({ player: false, opponent: false });
+  const [collectionAnnouncement, setCollectionAnnouncement] = useState(false);
+  useEffect(() => {
+    onGarbageMusicChange(collectionActive && !outcome);
+  }, [collectionActive, outcome, onGarbageMusicChange]);
+
   useEffect(() => stopSpeech, [stopSpeech]);
 
   useEffect(() => {
@@ -1744,6 +1777,22 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const choosingHandCard = game.selectedShield || game.selectedStack || game.selectedSpecial;
   const canReallocateShields = !tutorialGuided && !tutorialOpening && !isComputer && !showingCombatEffect && !game.pendingAttack && !warningActive;
   const canUseSupport = !tutorialGuided && !tutorialOpening && !isComputer && game.step !== "draw" && !game.pendingAttack && !showingCombatEffect;
+  const canActivateCollection = canUseSupport && !paused && !warningActive && !outcome &&
+    !playerCollects && game.playerField.filter(isCollector).length >= 3;
+
+  function activateGarbageCollection() {
+    if (!canActivateCollection) return;
+    setGame(current => {
+      if (current.phase !== "player" || hasGarbageCollection(current.playerField) ||
+          current.playerField.filter(isCollector).length < 3) return current;
+      return {
+        ...current,
+        playerField: current.playerField.map(unit => isCollector(unit) && !unit.revealed ? { ...unit, revealed: true } : unit),
+        result: "Garbage Collection activated.",
+      };
+    });
+  }
+
   const canChooseShield = canUseSupport && game.playerField.some(canShield);
   const canSpy = canUseSupport && opponentHasCards;
   const spySelected = canSpy && !!game.selectedShield && isJack(game.selectedShield);
@@ -1903,6 +1952,24 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     voice.cancel();
     voice.speak(announcement);
   }, [game.round, game.step, game.turn, isComputer, soundEnabled, outcome, showingCombatEffect, warningActive, skipAttack, paused, queenCue, canSpeak]);
+
+  useEffect(() => {
+    if (paused || showingCombatEffect || warningActive) return;
+    const before = previousCollectors.current;
+    previousCollectors.current = { player: playerCollects, opponent: opponentCollects };
+    if (!(playerCollects && !before.player) && !(opponentCollects && !before.opponent)) return;
+    setCollectionAnnouncement(true);
+    if (soundEnabled && canSpeak() && window.speechSynthesis && typeof SpeechSynthesisUtterance !== "undefined") {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(new SpeechSynthesisUtterance("Garbage Collection activated!"));
+    }
+  }, [playerCollects, opponentCollects, paused, showingCombatEffect, warningActive, soundEnabled, canSpeak]);
+  useEffect(() => {
+    if (!collectionAnnouncement) return;
+    const timer = window.setTimeout(() => setCollectionAnnouncement(false), 1800);
+    return () => window.clearTimeout(timer);
+  }, [collectionAnnouncement]);
+
 
   useEffect(() => {
     if (!isComputer || outcome || showingCombatEffect || warningActive || paused) return;
@@ -3145,6 +3212,9 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           <p><strong>Tip</strong> {matchTips[(Math.ceil(game.turn / 2) - 1) % matchTips.length]}</p>
         </aside>
       )}
+      {collectionAnnouncement && !paused && (
+        <div className="garbage-collection-announcement" role="status">Garbage Collection Activated</div>
+      )}
       {tutorial && !isComputer && !paused && !showingCombatEffect && !warningActive && (
         <aside className="tutorial-turn-prompt" role="status" aria-atomic="true">
           <p>{turnMessage}</p>
@@ -3338,6 +3408,11 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
                 setUtilityOpen(true);
               }}>Lab</button>
             )}
+            {canActivateCollection && (
+              <button type="button" className="garbage-collection-button" onClick={activateGarbageCollection}>
+                Activate Garbage Collection
+              </button>
+            )}
             <button className="pause-button" onClick={() => setPaused(true)}>Pause</button>
             <button className="simple-game-end-turn" disabled={!canEndTurn} onClick={endTurn}>END TURN</button>
             {canStackSelected && (
@@ -3361,6 +3436,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             <button type="button" className="side-panel-toggle" aria-expanded={showCardInfo}
               aria-controls="card-info-content" onClick={() => setShowCardInfo(open => !open)}>Card details</button>
             <div id="card-info-content" className="side-panel-content" hidden={!showCardInfo}>
+          <div className="discard-pile" data-garbage-active={collectionActive || undefined}>
           <h3>Discard / Graveyard</h3>
           {latestDiscard && (
             <button className={inspected === latestDiscard ? "inspect-card-button card-inspected" : "inspect-card-button"} data-card-position="discard-0"
@@ -3369,6 +3445,13 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             </button>
           )}
           <p>{game.discardPile.length} cards</p>
+          {collectionActive && (
+            <p className="garbage-collection-status">
+              {playerCollects && opponentCollects ? "Both sides collecting" : playerCollects ? "Your Garbage Collection is active" : "Enemy Garbage Collection is active"}
+              {game.discardPile[0] && <><br />Oldest card: {labCardName(game.discardPile[0])}</>}
+            </p>
+          )}
+          </div>
           <CardDetails card={inspected} layers={inspectedUnit?.shields?.length ?? 0} />
           {canReallocateShields && inspectedOwnUnit?.shields?.map((layer, index) => (
             <button key={index} className="shield-move-button"

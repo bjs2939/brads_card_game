@@ -289,6 +289,7 @@ export function useGameSound(game: SoundState, enabled: boolean, outcome: "victo
 const backgroundTracks = {
   menu: { file: "urban-theme.mp3", volume: 0.63 },
   battle: { file: "hard-battle-2.mp3", volume: 0.6 },
+  "garbage-collection": { file: "sneaky-snitch.mp3", volume: 0.62 },
 };
 
 type Track = keyof typeof backgroundTracks;

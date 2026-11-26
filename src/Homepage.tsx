@@ -20,9 +20,10 @@ export default function HomePage() {
   const [showIntro, setShowIntro] = useState(false);
   const [chooseDifficulty, setChooseDifficulty] = useState(false);
   const [showingResult, setShowingResult] = useState(false);
+  const [garbageMusic, setGarbageMusic] = useState(false);
   const tutorialAudio = useRef<AudioContext | null>(null);
   const modePicker = useRef<HTMLDialogElement>(null);
-  const music = useBackgroundMusic(!difficulty ? "menu" : showingResult ? null : "battle");
+  const music = useBackgroundMusic(!difficulty ? "menu" : showingResult ? null : garbageMusic ? "garbage-collection" : "battle");
 
   function stopTutorialAudio() {
     const audio = tutorialAudio.current;
@@ -47,6 +48,7 @@ export default function HomePage() {
   function goHome() {
     stopTutorialAudio();
     setShowingResult(false);
+    setGarbageMusic(false);
     setTrainingGrounds(false);
     setTutorial(false);
     setShowIntro(false);
@@ -68,7 +70,7 @@ export default function HomePage() {
   }
 
   if (difficulty) {
-    return <SimpleGame difficulty={difficulty} trainingGrounds={trainingGrounds} tutorial={tutorial} tutorialAudio={tutorialAudio.current} onBack={goHome} music={music} onResultChange={setShowingResult} />;
+    return <SimpleGame difficulty={difficulty} trainingGrounds={trainingGrounds} tutorial={tutorial} tutorialAudio={tutorialAudio.current} onBack={goHome} music={music} onResultChange={setShowingResult} onGarbageMusicChange={setGarbageMusic} />;
   }
 
   return (
