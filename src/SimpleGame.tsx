@@ -468,6 +468,26 @@ function rearrangeRank(game: Game, index: number, targetLane: number): Game {
   return { ...game, playerField: next, selected: null, movingStack: false, result: "Rearranged your rank." };
 }
 
+function preferredPromotionLane(field: Field, index: number) {
+  const unit = field[index];
+  if (!unit) return undefined;
+
+  const open = openLanes(field, "front");
+  const sourceLane = laneOf(unit, index);
+  const movingPower = offense(field, index);
+  const cover = open.flatMap(lane => {
+    const backLane = lane + slotsPerRank;
+    if (backLane === sourceLane) return [];
+    const behind = laneCards(field, backLane)[0];
+    if (!behind) return [];
+    const power = offense(field, behind.index);
+    return power < movingPower ? [{ lane, power }] : [];
+  }).sort((a, b) => a.power - b.power);
+
+  const ahead = sourceLane - slotsPerRank;
+  return cover[0]?.lane ?? (open.includes(ahead) ? ahead : open[0]);
+}
+
 function promoteUnit(game: Game, index: number, lane: number): Game {
   const unit = game.playerField[index];
   if (!unit || game.phase !== "player" || game.step !== "move-up") return game;
@@ -2744,9 +2764,10 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       if (current.step === "move-up" && !shield && !current.movingStack && !current.selectedSpecial &&
           fieldRank(unit, index) === "back") {
         const directlyAhead = laneOf(unit, index) - slotsPerRank;
-        if (openLanes(current.playerField, "front").includes(directlyAhead)) {
-          return promoteUnit(current, index, directlyAhead);
-        }
+        const destination = tutorialGuided
+          ? openLanes(current.playerField, "front").find(lane => lane === directlyAhead)
+          : preferredPromotionLane(current.playerField, index);
+        if (destination !== undefined) return promoteUnit(current, index, destination);
       }
 
       const canAttack = !attackRestricted(current) && canAttackFrom(unit, index, current.computerField, current.computer.length);
@@ -2784,7 +2805,9 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       if (!unit || fieldRank(unit, index) !== "back" || (tutorialDuel && isTutorialSix(unit.card)) || tutorialRevenge) return current;
       const open = openLanes(current.playerField, "front");
       const directlyAhead = laneOf(unit, index) - slotsPerRank;
-      const lane = open.includes(directlyAhead) ? directlyAhead : open[0];
+      const lane = tutorialGuided
+        ? open.includes(directlyAhead) ? directlyAhead : open[0]
+        : preferredPromotionLane(current.playerField, index);
       return lane === undefined ? current : promoteUnit(current, index, lane);
     });
   }
