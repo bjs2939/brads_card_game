@@ -85,6 +85,7 @@ type Game = ReturnType<typeof dealSimpleGame> & {
   turn: number;
   drewCard: boolean;
   drawnCard?: Card;
+  recoveredDiscard?: { card: Card; side: Side };
   deckWarning?: 0 | 1 | 2 | 3 | 4 | 5 | 10;
   spyFlash?: Card;
   attackAnimation?: { attacker: Card; target: Card; side: Side; kind: "ranger" | "dragon" | "card"; shield?: { card?: Card; builtIn?: true } };
@@ -321,7 +322,7 @@ function isHolyKnight(card: Card) {
 function castleAttackerIndex(game: Game) {
   if (game.phase !== "player" || game.turn <= 2 || game.step === "draw" || attackRestricted(game) ||
       game.pendingAttack || game.movingStack || game.immunityWarningTarget !== undefined ||
-      game.attackAnimation || game.specialStrike || game.jokerExplosion || game.deckWarning !== undefined ||
+      game.attackAnimation || game.specialStrike || game.jokerExplosion || game.recoveredDiscard || game.deckWarning !== undefined ||
       !game.computer.length || game.computerField.some(Boolean)) return -1;
 
   const canStrikeCastle = (unit: Unit | null, index: number) =>
@@ -342,7 +343,7 @@ function canMoveUp(field: Field) {
 function canDeployThisPhase(game: Game) {
   return game.phase === "player" && game.step !== "draw" &&
     !game.pendingAttack && !game.specialStrike && !game.jokerExplosion &&
-    !game.attackAnimation && game.immunityWarningTarget === undefined;
+    !game.attackAnimation && !game.recoveredDiscard && game.immunityWarningTarget === undefined;
 }
 
 function hasMoveOutAction(game: Game) {
@@ -1019,6 +1020,7 @@ function drawForTurn(game: Game, side: "player" | "computer"): Game {
       ...game,
       [collector]: [...game[collector], oldest],
       discardPile: remainingDiscards,
+      recoveredDiscard: { card: oldest, side: collector },
       result: [game.result, `Garbage Collection: ${actor} ${labCardName(oldest)} from the bottom of the discard pile.`]
         .filter(Boolean).join(" "),
     };
@@ -1741,7 +1743,16 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     if (outcome) resultHeading.current?.focus();
   }, [outcome, onResultChange]);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const showingCombatEffect = Boolean(game.specialStrike || game.jokerExplosion || game.attackAnimation);
+  const attackEffectActive = Boolean(game.specialStrike || game.jokerExplosion || game.attackAnimation || game.spyFlash);
+  const recoveryPreview = !attackEffectActive && !paused ? game.recoveredDiscard : undefined;
+  const showingCombatEffect = attackEffectActive || Boolean(game.recoveredDiscard);
+  useEffect(() => {
+    if (!recoveryPreview) return;
+    const timer = window.setTimeout(() => {
+      setGame(current => current.recoveredDiscard === recoveryPreview ? { ...current, recoveredDiscard: undefined } : current);
+    }, 2200);
+    return () => window.clearTimeout(timer);
+  }, [recoveryPreview]);
   const { setDucked } = music;
   useEffect(() => {
     if (!showingCombatEffect || !soundEnabled) return;
@@ -3282,6 +3293,12 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           }}>Yes, Continue</button>
         </div>
       </dialog>
+      {recoveryPreview && (
+        <div className="player-draw-preview discard-recovery-preview" data-collector={recoveryPreview.side} role="status">
+          <strong>{recoveryPreview.side === "player" ? "Garbage Collection" : "Enemy Garbage Collection"}</strong>
+          <CardFace card={recoveryPreview.card} />
+        </div>
+      )}
       {warningActive && (
         <div className="deck-warning-overlay" key={deckWarning} role="alert">
           <span>{deckWarning === 0 ? "Draw deck empty" : "Warning"}</span>
@@ -3486,7 +3503,8 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       <h2 className="opponent-hand-heading">Computer’s hand</h2>
       <div className="hand-row opponent-hand-row" data-castle-targeting={castleTargeting} style={compactBoard ? undefined : handLayout}>
         {Array.from({ length: setupPending ? 0 : game.computer.length }, (_, index) => (
-          <div key={index} data-card-position={`computer-${index}`}>
+          <div key={index} data-card-position={`computer-${index}`}
+            className={game.recoveredDiscard?.card === game.computer[index] ? "drawn-hand-card" : undefined}>
             {castleTargeting ? (
               <button className="simple-game-castle-target" aria-label={`Attack castle, hidden card ${index + 1}`} onClick={() => attackCastle(index)}>
                 <CardFace faceDown />
@@ -3724,7 +3742,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             aria-pressed={isShield(card) || isSpecial(card) || (canStackFromHand && (!canDeployFromHand || choosingHandStack || game.selectedStack === card) && hasStackTarget(card)) ? choosingHandCard === card : undefined}
             className={[
               choosingHandCard === card ? "simple-game-selected-shield" : inspected === card ? "card-inspected" : "",
-              game.step === "draw" && game.drawnCard === card ? "drawn-hand-card" : "",
+              (game.step === "draw" && game.drawnCard === card) || game.recoveredDiscard?.card === card ? "drawn-hand-card" : "",
               isMovingOut && (tutorialDeployment === card || ((tutorialDeployHalfling || tutorialReinforce || tutorialNines || tutorialJoker) && canUseHandCard(card)))
                 ? "tutorial-deploy-card" : "",
             ].filter(Boolean).join(" ")}

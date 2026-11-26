@@ -12,6 +12,7 @@ type View = {
   turn: number;
   drewCard: boolean;
   drawnCard?: Card;
+  recoveredDiscard?: { card: Card };
 };
 
 export function useCardMotion(game: View) {
@@ -58,7 +59,7 @@ export function useCardMotion(game: View) {
 
         const from = old?.cards.get(unit.card);
         const drawing = !from && (Boolean(old) || unit.card === drawn);
-        if (drawing && unit.card === game.drawnCard) return;
+        if (unit.card === game.recoveredDiscard?.card || (drawing && unit.card === game.drawnCard)) return;
         const origin = from?.rect ?? (drawing ? old?.deck ?? deck : undefined);
         const flipping = from?.faceDown && unit.revealed;
         if (!origin) return;

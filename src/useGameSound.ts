@@ -94,6 +94,8 @@ type SoundState = {
   advantage?: boolean;
   attackAnimation?: { kind: "ranger" | "dragon" | "card" };
   specialStrike?: unknown;
+  spyFlash?: unknown;
+  recoveredDiscard?: unknown;
   jokerExplosion?: unknown;
   deckWarning?: 0 | 1 | 2 | 3 | 4 | 5 | 10;
 };
@@ -246,8 +248,11 @@ export function useGameSound(game: SoundState, enabled: boolean, outcome: "victo
       if (cue === "lightning") source.stop(start + 2.15);
     };
     const newRound = old.round !== game.round;
-    const combatEffect = game.specialStrike || game.jokerExplosion || game.attackAnimation;
-    const strikeFinished = Boolean(old.specialStrike || old.jokerExplosion || old.attackAnimation) && !combatEffect;
+    const attackEffect = game.specialStrike || game.jokerExplosion || game.attackAnimation || game.spyFlash;
+    const oldAttackEffect = old.specialStrike || old.jokerExplosion || old.attackAnimation || old.spyFlash;
+    const combatEffect = attackEffect || game.recoveredDiscard;
+    const strikeFinished = Boolean(oldAttackEffect || old.recoveredDiscard) && !combatEffect;
+    if (game.recoveredDiscard && !attackEffect && (game.recoveredDiscard !== old.recoveredDiscard || oldAttackEffect)) play("draw");
     const newTurn = old.turn !== game.turn || newRound || strikeFinished;
     if (newRound) play("shuffle");
     if (legendaryStrike) play("lightning", 0.16);
