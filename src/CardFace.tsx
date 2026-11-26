@@ -13,10 +13,13 @@ const characters: Partial<Record<Rank, { sprite: string; className: string; size
   "10": { sprite: "dragon-10", className: "", size: 32 },
 };
 
-const legendarySprites: Partial<Record<Suit, string>> = {
-  hearts: "flame-swordsman-9-hearts",
-  clubs: "spear-warrior-9-clubs",
-  diamonds: "wizard-9-diamonds",
+const suitSprites: Partial<Record<Rank, Partial<Record<Suit, string>>>> = {
+  "8": { clubs: "unicorn-lancer-8-clubs" },
+  "9": {
+    hearts: "flame-swordsman-9-hearts",
+    clubs: "spear-warrior-9-clubs",
+    diamonds: "wizard-9-diamonds",
+  },
 };
 
 export default function CardFace({ card, faceDown = false }: { card?: Card; faceDown?: boolean }) {
@@ -27,11 +30,11 @@ export default function CardFace({ card, faceDown = false }: { card?: Card; face
   const image = faceDown ? "card-back-blue" : label?.replace(/ /g, "-");
   const legendary = !faceDown && card?.type === "standard" && card.rank === "9";
   const dragon = !faceDown && card?.type === "standard" && card.rank === "10";
-  const legendarySprite = legendary ? legendarySprites[card.suit] : undefined;
+  const suitSprite = card?.type === "standard" ? suitSprites[card.rank]?.[card.suit] : undefined;
   const character = faceDown || !card ? undefined
     : card.type === "joker" ? { sprite: "joker-bomb", className: "card-ranger-overlay", size: 50 }
-    : legendarySprite
-      ? { sprite: legendarySprite, className: "card-ranger-overlay", size: 60 }
+    : suitSprite
+      ? { sprite: suitSprite, className: "card-ranger-overlay", size: 60 }
       : characters[card.rank];
 
   return (
