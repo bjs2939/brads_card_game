@@ -1972,7 +1972,9 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             return drawForTurn({ ...resolved, phase: "player" }, "player");
           }
         }
-        if (tutorial && (current.turn === 14 || current.turn === 26 || current.turn === 28 || current.turn === 34 || current.turn === 36)) {
+        // Keep the face-down 10♥ in reserve until the player attacks it on turn 16.
+        if (tutorial && (current.turn === 14 || current.turn === 26 || current.turn === 28 ||
+            current.turn === 30 || current.turn === 34 || current.turn === 36)) {
           return drawForTurn({ ...current, phase: "player", result: "The opponent held its position." }, "player");
         }
         if (difficulty === "Sandbox") {
