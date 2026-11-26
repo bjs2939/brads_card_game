@@ -223,6 +223,30 @@ export const tutorialLessons = {
     { speaker: "garrison", text: "Their 6♣ has range. Select your 8♠ or 10♣, then attack the 6♣. That ends your turn." },
     { speaker: "locke", text: "Either one works? This is the sort of decision I was born to make." },
   ],
+  "tutorial-victory": [
+    { speaker: "garrison", text: "Well fought. The castle stands, and I can sign off on Locke's community service." },
+    { speaker: "locke", text: "Could you write 'distinguished service'? It would look better next to the charges." },
+    { speaker: "garrison", text: "I'll write 'completed.' The player did most of the work." },
+    { speaker: "locke", text: "Fair. Next time I get into trouble, I'm requesting you as my commanding officer." },
+    { speaker: "garrison", text: "Try requesting less trouble." },
+  ],
+  "attack-the-castle": [
+    { speaker: "garrison", text: "Their battlefield is empty. With a number card in your front rank, click one face-down card in the enemy hand. That card goes straight to the discard pile, and your turn ends." },
+    { speaker: "locke", text: "That's a castle attack. You get to pick the card. Which card you picked is the surprise." },
+  ],
+  "enemy-king": [
+    { speaker: "locke", text: "A King? I had a feeling that lightning wasn't a weather report." },
+    { speaker: "garrison", text: "A King is spent to use Instant Kill. Power doesn't matter. It can defeat every vulnerable card in a stack, but suit-immune cards survive and Jokers are immune." },
+  ],
+  "enemy-ace-steal": [
+    { speaker: "locke", text: "Wait, that was our card. I know a theft when I see one." },
+    { speaker: "garrison", text: "They spent an Ace on Instant Steal. Vulnerable cards and shields go into the opponent's hand, where they can be played against you. Suit immunity can protect a card, and Jokers are immune to an Ace." },
+    { speaker: "locke", text: "If you draw an Ace, you can return the favor. I mean, recover strategically important property." },
+  ],
+  "joker-blast-reaction": [
+    { speaker: "locke", text: "Well, that card went out with a bang." },
+    { speaker: "garrison", text: "That's a Joker trap. The Joker and the attacking cards go to the discard pile. A 5 can survive the blast." },
+  ],
   "on-your-own": [
     { speaker: "garrison", text: "You're on your own for a while. Check the suits and shields before you attack, and pick fights you can win. Keep that up and you'll be fine." },
     { speaker: "locke", text: "And if a face-down card looks too easy, remember my extremely educational encounter with a dragon." },
