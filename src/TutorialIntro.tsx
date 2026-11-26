@@ -201,6 +201,26 @@ export const tutorialLessons = {
     { speaker: "locke", text: "Queens have another trick. You can discard one to attack twice in the same turn. Select a Queen from your hand, then press Double Attack." },
     { speaker: "garrison", text: "Use your shielded 10♣ against the 10♥ first. Then select the 10♣ again and attack the J♣ shield on the 5♦. One turn, two cards taken out." },
   ],
+  "ten-cards-left": [
+    { speaker: "locke", text: "Ten cards left? Commander, what’s happening? Has someone been stealing from the deck? I’d appreciate it if you’d look at someone else." },
+    { speaker: "garrison", text: "A low deck means the match is entering its final stretch. Once it runs out, you’ll have to make do with the cards you have. These turns can change who wins, so choose your attacks carefully." },
+  ],
+  "joker-deploy": [
+    { speaker: "garrison", text: "You drew a Joker. It can’t attack. Leave it face down and let an enemy spring the trap. An attacker normally goes down with the Joker." },
+    { speaker: "locke", text: "Except 5s. They’re combat engineers, and they’re immune to the blast. Apparently someone read the safety manual." },
+    { speaker: "garrison", text: "Deploy the Joker to your back rank. Then we’ll deal with the enemy 5♦ before it gets any ideas." },
+  ],
+  "replace-lost-nine": [
+    { speaker: "locke", text: "I still miss our 9♥. I was getting used to a plan that involved somebody else getting hit." },
+    { speaker: "garrison", text: "We lost it to their dragon. Deploy your second Joker to the back rank. Let the enemy take a chance this time." },
+  ],
+  "attack-enemy-ranger": [
+    { speaker: "garrison", text: "Their 6♣ has range. Select your 8♠ or 10♣, then attack the 6♣. That ends your turn." },
+    { speaker: "locke", text: "Either one works? This is the sort of decision I was born to make." },
+  ],
+  "protect-the-joker": [
+    { speaker: "locke", text: "The Joker’s in place. Use either your 8♠ or your 10♣ to take out the exposed 5♦. We don’t need the enemy sending a bomb disposal crew." },
+  ],
 } satisfies Record<string, readonly DialogueLine[]>;
 
 export function TutorialBattleDialogue({ lesson, audio, onDone }: {

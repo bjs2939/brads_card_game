@@ -42,6 +42,11 @@ export function createTutorialDeck(): Card[] {
   // Draw the enemy's 7 of Hearts on its third turn so it can deploy before the shield lesson.
   const seven = deck.findIndex(card => card.type === "standard" && card.suit === "hearts" && card.rank === "7");
   [deck[15], deck[seven]] = [deck[seven], deck[15]];
+  // Turn 18's enemy draw and turn 19's player draw.
+  const ranger = deck.findIndex(card => card.type === "standard" && card.rank === "6" && card.suit === "clubs");
+  [deck[45], deck[ranger]] = [deck[ranger], deck[45]];
+  const joker = deck.findIndex(card => card.type === "joker" && card.color === "black");
+  [deck[46], deck[joker]] = [deck[joker], deck[46]];
   return deck;
 }
 
