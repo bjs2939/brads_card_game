@@ -474,14 +474,12 @@ function preferredPromotionLane(field: Field, index: number) {
 
   const open = openLanes(field, "front");
   const sourceLane = laneOf(unit, index);
-  const movingPower = offense(field, index);
   const cover = open.flatMap(lane => {
     const backLane = lane + slotsPerRank;
     if (backLane === sourceLane) return [];
     const behind = laneCards(field, backLane)[0];
     if (!behind) return [];
-    const power = offense(field, behind.index);
-    return power < movingPower ? [{ lane, power }] : [];
+    return [{ lane, power: offense(field, behind.index) }];
   }).sort((a, b) => a.power - b.power);
 
   const ahead = sourceLane - slotsPerRank;
