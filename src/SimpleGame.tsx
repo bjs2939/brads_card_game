@@ -2569,11 +2569,17 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   );
   const placingTutorialSix = tutorialDuel && isMovingUp && formationReady;
   const tutorialSixSelected = selectedUnit && isTutorialSix(selectedUnit.card);
-  const tutorialFourIndex = tutorialRevenge && !revengeReady
-    ? game.playerField.findIndex(unit => unit && isTutorialFour(unit.card)) : -1;
-  const tutorialFour = game.playerField[tutorialFourIndex];
-  const fourMoveGuide = tutorialFour
-    ? { from: laneOf(tutorialFour, tutorialFourIndex), to: tutorialCoverLane, label: "Move the 4 here to cover the 6" }
+  const frontCoverCard = movingReserveToCover ? isTutorialReserve
+    : tutorialRevenge && !revengeReady ? isTutorialFour : undefined;
+  const frontCoverIndex = frontCoverCard
+    ? game.playerField.findIndex(unit => unit && frontCoverCard(unit.card)) : -1;
+  const frontCoverUnit = game.playerField[frontCoverIndex];
+  const frontMoveGuide = frontCoverUnit
+    ? {
+        from: laneOf(frontCoverUnit, frontCoverIndex),
+        to: tutorialCoverLane,
+        label: movingReserveToCover ? "Move the 8 here to cover the 6" : "Move the 4 here to cover the 6",
+      }
     : undefined;
   const rangerIndex = placingTutorialSix ? game.playerField.findIndex(unit => unit && isTutorialSix(unit.card)) : -1;
   const ranger = game.playerField[rangerIndex];
@@ -2592,7 +2598,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       highlightRanged={rank === "back" && isAttacking && !skipAttack}
       rank={rank}
       label={rank === "front" ? "Your front rank" : "Your back rank"}
-      moveGuide={rank === "front" ? fourMoveGuide : sixMoveGuide}
+      moveGuide={rank === "front" ? frontMoveGuide : sixMoveGuide}
       selected={selected}
       onPick={!isComputer && !showingCombatEffect && !game.pendingAttack && !game.selectedSpecial ? pickUnit : undefined}
       canPick={canPickOwnUnit}
