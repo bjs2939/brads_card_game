@@ -1,0 +1,87 @@
+.tutorial-intro {
+  position: relative;
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  isolation: isolate;
+  background: radial-gradient(ellipse at center, #23495b, #112238 75%);
+  color: #fff3d5;
+}
+
+.tutorial-field {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  justify-content: center;
+  gap: 0.4rem;
+  overflow: hidden;
+}
+
+.tutorial-rank {
+  padding: 0.4rem 1rem 0.6rem;
+  border: 1px solid #55768f;
+  border-radius: 0.55rem;
+  background: #173650;
+  text-align: center;
+}
+
+.tutorial-enemy-rank {
+  background: #502f38;
+  border-color: #a26b71;
+}
+
+.tutorial-rank div { display: flex; gap: 0.55rem; margin-top: 0.3rem; }
+.tutorial-rank i {
+  width: clamp(3rem, 12vw, 5rem);
+  aspect-ratio: 5 / 7;
+  border: 1px dashed #96adb9;
+  border-radius: 0.4rem;
+  background: #0b172239;
+}
+
+.tutorial-overlay {
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  align-self: stretch;
+  justify-self: stretch;
+  padding: 1rem;
+  background: #080f1abc;
+}
+
+.tutorial-scene { width: min(100%, 40rem); }
+.tutorial-scene h1 { margin: 0 0 0.75rem; text-align: center; }
+.tutorial-portraits {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  margin-inline: clamp(0rem, 5vw, 2rem);
+}
+
+.tutorial-portrait {
+  width: clamp(5.5rem, 25vw, 9rem);
+  height: clamp(5.5rem, 25vw, 9rem);
+  overflow: hidden;
+  border: 1px solid #627480;
+  border-radius: 0.65rem 0.65rem 0 0;
+  background: #202f39;
+  opacity: 0.72;
+}
+
+.tutorial-portrait[data-speaking="true"] { opacity: 1; border-color: #e9c57a; }
+.tutorial-portrait img { display: block; width: 100%; transform: scaleX(-1); }
+.tutorial-portrait-garrison img { transform: scale(-1.18, 1.18); }
+.tutorial-dialogue {
+  padding: clamp(0.9rem, 3vw, 1.4rem);
+  border: 1px solid #b89761;
+  border-radius: 0.65rem;
+  background: #102c35;
+  box-shadow: 0 0.5rem 2rem #0009;
+}
+
+.tutorial-dialogue h2 { margin: 0; color: #f5cf82; }
+.tutorial-dialogue p { min-height: 3.8em; margin: 0.45rem 0 0.9rem; line-height: 1.45; }
+.tutorial-controls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.45rem; }
+.tutorial-controls button { min-height: 2.65rem; }
+.tutorial-controls .tutorial-next { background: #eac475; color: #171109; }

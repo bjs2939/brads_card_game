@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import TutorialIntro from "./TutorialIntro";
 import CardFace from "./CardFace";
 import { Feedback, MatchHistory, gameVersion } from "./PlaytestPanels";
 import SimpleGame, { difficulties, simpleVersionTitle, type Difficulty } from "./SimpleGame";
@@ -15,6 +16,8 @@ const difficultyDescriptions: Record<Difficulty, string> = {
 export default function HomePage() {
   const [difficulty, setDifficulty] = useState<Difficulty | null>(null);
   const [trainingGrounds, setTrainingGrounds] = useState(false);
+  const [tutorial, setTutorial] = useState(false);
+  const [showIntro, setShowIntro] = useState(false);
   const [chooseDifficulty, setChooseDifficulty] = useState(false);
   const [showingResult, setShowingResult] = useState(false);
   const modePicker = useRef<HTMLDialogElement>(null);
@@ -23,18 +26,26 @@ export default function HomePage() {
   function goHome() {
     setShowingResult(false);
     setTrainingGrounds(false);
+    setTutorial(false);
+    setShowIntro(false);
     setDifficulty(null);
   }
 
-  function launchMatch(level: Difficulty, training = false) {
+  function launchMatch(level: Difficulty, training = false, tutorialMatch = false) {
     modePicker.current?.close();
     music.start("battle");
     setTrainingGrounds(training);
+    setTutorial(tutorialMatch);
+    setShowIntro(false);
     setDifficulty(level);
   }
 
+  if (showIntro) {
+    return <TutorialIntro onDeal={() => launchMatch("Easy", false, true)} onExit={goHome} />;
+  }
+
   if (difficulty) {
-    return <SimpleGame difficulty={difficulty} trainingGrounds={trainingGrounds} onBack={goHome} music={music} onResultChange={setShowingResult} />;
+    return <SimpleGame difficulty={difficulty} trainingGrounds={trainingGrounds} tutorial={tutorial} onBack={goHome} music={music} onResultChange={setShowingResult} />;
   }
 
   return (
@@ -76,7 +87,7 @@ export default function HomePage() {
           )) : (
             <>
               <button disabled>Campaign <small>Coming soon</small></button>
-              <button type="button" onClick={() => launchMatch("Easy")}>Tutorial</button>
+              <button type="button" onClick={() => { modePicker.current?.close(); setShowIntro(true); }}>Tutorial</button>
               <button className="game-home-primary" onClick={() => setChooseDifficulty(true)}>VS Computer</button>
               <button disabled>Online Matchmaking <small>Coming soon</small></button>
               <button disabled>VS Friend <small>Coming soon</small></button>

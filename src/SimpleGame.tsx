@@ -5,7 +5,7 @@ import { sandboxRetreatPlan, saveMatch } from "./playtest";
 import { useCardMotion } from "./useCardMotion";
 import { useAudioForeground, useGameSound, type GameSound } from "./useGameSound";
 import "./SimpleGame.css";
-import { createStandardDeck, dealSimpleGame, ranks } from "./game_engine/deck";
+import { createStandardDeck, createTutorialDeck, dealSimpleGame, ranks } from "./game_engine/deck";
 import type { Card, Suit } from "./game_engine/types";
 
 export const simpleVersionTitle = "Brad's Card Game";
@@ -867,9 +867,9 @@ function finishPlayerAttack(game: Game): Game {
   return drawForTurn({ ...game, extraAttack: false }, "computer");
 }
 
-function startGame(): Game {
+function startGame(tutorial = false): Game {
   return drawForTurn({
-    ...dealSimpleGame(),
+    ...dealSimpleGame(tutorial ? createTutorialDeck() : undefined),
     playerField: [],
     backRankAtTurnStart: [],
     computerField: [],
@@ -1172,14 +1172,15 @@ function describeMatchActions(previous: Game, current: Game): string[] {
   return lines;
 }
 
-export default function SimpleGame({ difficulty, trainingGrounds = false, onBack, music, onResultChange }: {
+export default function SimpleGame({ difficulty, trainingGrounds = false, tutorial = false, onBack, music, onResultChange }: {
   difficulty: Difficulty;
   trainingGrounds?: boolean;
+  tutorial?: boolean;
   onBack: () => void;
   music: { enabled: boolean; toggle: () => void; setDucked: (ducked: boolean) => void };
   onResultChange: (visible: boolean) => void;
 }) {
-  const [game, setGame] = useState(startGame);
+  const [game, setGame] = useState(() => startGame(tutorial));
   const [compactBoard, setCompactBoard] = useState(() => window.matchMedia(compactBoardQuery).matches);
   const [showMatchInfo, setShowMatchInfo] = useState(!compactBoard);
   const [showCardInfo, setShowCardInfo] = useState(!compactBoard);
@@ -1243,16 +1244,16 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, onBack
   const latestDiscard = game.discardPile[game.discardPile.length - 1];
   const board = useCardMotion(game);
   const outcome = matchOutcome(game);
-  const modeLabel = trainingGrounds ? "Training Grounds" : `VS Computer · ${difficulty}`;
+  const modeLabel = tutorial ? "Tutorial · Easy" : trainingGrounds ? "Training Grounds" : `VS Computer · ${difficulty}`;
   useEffect(() => {
     if (game.turn <= 1 && !outcome) return;
     saveMatch({
       ...game.round,
-      difficulty: trainingGrounds ? "Training Grounds" : difficulty,
+      difficulty: tutorial ? "Tutorial · Easy" : trainingGrounds ? "Training Grounds" : difficulty,
       result: outcome || "In progress / left match",
       lines: matchLog,
     });
-  }, [difficulty, trainingGrounds, game.round, game.turn, matchLog, outcome]);
+  }, [difficulty, trainingGrounds, tutorial, game.round, game.turn, matchLog, outcome]);
   const resultHeading = useRef<HTMLHeadingElement>(null);
   const immunityDialog = useRef<HTMLDialogElement>(null);
   const stackTargetDialog = useRef<HTMLDialogElement>(null);
@@ -2262,7 +2263,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, onBack
             : "Both sides ran out of cards."}</p>
           {game.result && <p>{game.result}</p>}
           <div className="match-result-actions">
-            <button onClick={() => setGame(startGame())}>Play Again</button>
+            <button onClick={() => setGame(startGame(tutorial))}>Play Again</button>
             <button onClick={onBack}>Back to Home</button>
           </div>
         </section>
