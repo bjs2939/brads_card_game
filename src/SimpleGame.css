@@ -1819,6 +1819,7 @@
   color: #fff1ca;
   font: 680 0.82rem/1.4 system-ui, sans-serif;
 }
+.convert-status-top { width: min(34rem, 100%); margin-inline: auto; box-sizing: border-box; }
 .convert-status strong { color: #ffd98f; font-size: 1rem; }
 .simple-game-stack-card[data-convert-recovering] > button:not(.simple-game-shield-card) {
   transform: rotate(90deg) scale(0.69);
@@ -1979,6 +1980,8 @@
 }
 
 button.simple-game-shield-card {
+  touch-action: none;
+  user-select: none;
   padding: 0;
   border: 0;
   border-radius: 0.5rem;
@@ -2003,4 +2006,49 @@ button.simple-game-shield-card:is(:hover, :focus-visible, [aria-pressed="true"])
   outline: 2px solid #f7d487;
   outline-offset: 2px;
   box-shadow: 0 0 0.75rem #ffcc7099;
+}
+
+.attack-cutaway--convert {
+  border-color: #ffe899;
+  background: radial-gradient(ellipse at 35% 60%, #5a441d, #241d2e 75%);
+}
+.attack-cutaway--convert .convert-knight { filter: drop-shadow(0 0 0.65rem #ffd1538c); }
+.convert-magic-travel {
+  position: absolute;
+  z-index: 4;
+  top: 50%;
+  left: 12%;
+  width: clamp(4.5rem, 29vw, 8rem);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: convert-magic-reach 1750ms ease-in-out both;
+}
+.convert-magic-frames {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background-size: 800% 100%;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 0.6rem #ffca46);
+  animation: convert-magic-frames 1750ms steps(7, end) both;
+}
+.attack-cutaway--convert .attack-cutaway-impact {
+  animation: convert-magic-impact 500ms 1050ms ease-out both;
+}
+@keyframes convert-magic-frames { from { background-position: 0 0; } to { background-position: 100% 0; } }
+@keyframes convert-magic-reach {
+  0% { left: 20%; }
+  58%, 100% { left: 79%; }
+  85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes convert-magic-impact {
+  25% { filter: brightness(1.45) drop-shadow(0 0 0.6rem #ffdc60); transform: translateX(0.22rem); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .convert-magic-travel, .convert-magic-frames, .attack-cutaway--convert .attack-cutaway-impact { animation: none; }
+  .convert-magic-travel { left: 69%; opacity: 0.5; }
+  .convert-magic-frames { background-position: 85.714% 0; }
 }
