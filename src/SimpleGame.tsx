@@ -3791,12 +3791,6 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
         <span className="compact-scoreboard-player">You <strong>{health(game.player, game.playerField)}</strong></span>
         <span>Deck <strong>{game.drawPile.length}</strong></span>
       </div>
-      {offenseRestricted && (
-        <div className="convert-status convert-status-top" role="status">
-          <strong>Convert Recovery Turn</strong>
-          <span>Move, deploy, shield, or retreat. Press END TURN when you’re done. Attacks and offensive specials return next turn.</span>
-        </div>
-      )}
       <div className="simple-game-board">
         <section className="match-info-panel" aria-label="Health, draw deck, and match log">
           <button type="button" className="side-panel-toggle" aria-expanded={showMatchInfo}
@@ -3890,6 +3884,12 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           <div className="field-center-line" aria-live="polite">
             <span>TURN {Math.ceil(game.turn / 2)} · {isComputer ? "ENEMY" : "PLAYER"} — {skipAttack ? "ENDING TURN" : turnSteps[game.step].toUpperCase()}</span>
           </div>
+          {offenseRestricted && (
+            <div className="convert-status convert-status-top" role="status">
+              <strong>Convert Recovery Turn</strong>
+              <span>Move, deploy, shield, or retreat. Press END TURN when you’re done. Attacks and offensive specials return next turn.</span>
+            </div>
+          )}
           {ownRows}
           {canReallocateShields && game.movingShield && (
             <div className="turn-controls" role="group" aria-label="Move shield">
