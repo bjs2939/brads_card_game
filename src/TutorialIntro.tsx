@@ -24,10 +24,11 @@ function playTypingTick(audio: AudioContext, lowerPitch: boolean) {
   const start = audio.currentTime;
   const tone = audio.createOscillator();
   const volume = audio.createGain();
-  tone.type = "triangle";
-  tone.frequency.setValueAtTime(lowerPitch ? 255 : 380, start);
-  volume.gain.setValueAtTime(0.025, start);
-  volume.gain.exponentialRampToValueAtTime(0.0001, start + 0.032);
+  tone.type = "square";
+  tone.frequency.setValueAtTime(lowerPitch ? 235 : 340, start);
+  tone.frequency.exponentialRampToValueAtTime(lowerPitch ? 145 : 190, start + 0.022);
+  volume.gain.setValueAtTime(0.04, start);
+  volume.gain.exponentialRampToValueAtTime(0.0001, start + 0.025);
   tone.connect(volume).connect(audio.destination);
   tone.start(start);
   tone.stop(start + 0.035);
@@ -166,21 +167,27 @@ function TutorialDialogue({ lines, audio, actionLabel, onDone, onExit }: {
     if (!typing) return;
     const timer = window.setTimeout(() => {
       const character = text[visibleLength];
-      if (sound && audio && canPlayAudio() && visibleLength % 2 === 0 && character.trim()) {
+      if (sound && audio && canPlayAudio() && character.trim()) {
         playTypingTick(audio, speaker === "garrison");
       }
       setVisibleLength(visibleLength + 1);
-    }, 23);
+    }, 31);
     return () => window.clearTimeout(timer);
   }, [audio, canPlayAudio, sound, speaker, text, typing, visibleLength]);
 
+  function resumeTypingAudio() {
+    if (sound && audio?.state === "suspended" && canPlayAudio()) void audio.resume().catch(() => {});
+  }
+
   function previous() {
+    resumeTypingAudio();
     if (index === 0) return;
     setVisibleLength(0);
     setIndex(index - 1);
   }
 
   function next() {
+    resumeTypingAudio();
     if (typing) {
       setVisibleLength(text.length);
     } else if (last) {
