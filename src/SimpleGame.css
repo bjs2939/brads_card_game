@@ -1587,3 +1587,29 @@
   color: #ffd47c;
   font: 900 clamp(1.5rem, 6vw, 3rem)/1 system-ui, sans-serif;
 }
+
+.tutorial-shield-reminder {
+  position: fixed;
+  z-index: 9;
+  top: max(0.75rem, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(30rem, calc(100% - 1.5rem));
+  padding: 0.65rem 1rem;
+  border: 1px solid #bd9659;
+  border-radius: 0.65rem;
+  background: #102137f5;
+  color: #ffe2a0;
+  box-shadow: 0 0.35rem 1.15rem #060d1a99;
+  font: 700 0.9rem/1.4 system-ui, sans-serif;
+  text-align: center;
+  pointer-events: none;
+}
+
+.tutorial-shield-reminder span {
+  display: block;
+  color: #edf3fb;
+  font-weight: 500;
+}

@@ -2526,6 +2526,12 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             }
           }} />
       )}
+      {transferringTutorialShield && !paused && (
+        <aside className="tutorial-shield-reminder" role="status">
+          Before you attack, move your shield from the 2 of Hearts to the 8 of Clubs.
+          <span>{game.movingShield ? "Select the 8 of Clubs." : "Select the shielded 2 of Hearts first."}</span>
+        </aside>
+      )}
       <Feedback floating onOpenChange={setUtilityOpen}
         context={`Version ${gameVersion} · ${modeLabel} · Turn ${Math.ceil(game.turn / 2)} · Deck ${game.drawPile.length} · Player health ${health(game.player, game.playerField)} · Opponent health ${health(game.computer, game.computerField)}`} />
       {trainingGrounds && (
