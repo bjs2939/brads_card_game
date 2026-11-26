@@ -1055,7 +1055,7 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
   onDoublePick?: (index: number) => void;
   highlighted?: boolean;
   highlightRanged?: boolean;
-  moveGuide?: { from: number; to: number };
+  moveGuide?: { from: number; to: number; label: string };
   canPick?: (unit: Unit, index: number) => boolean;
 }) {
   return (
@@ -1078,7 +1078,7 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
                   Move Here
                 </button>
               ) : <div key={lane} className={`field-slot${arrow ? " cover-move-target" : ""}`} {...dropProps}
-                aria-label={arrow ? "Move the 4 here to cover the 6" : "Empty slot"}>{guide}</div>
+                aria-label={arrow ? moveGuide?.label : "Empty slot"}>{guide}</div>
             );
           }
 
@@ -2572,7 +2572,18 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const tutorialFourIndex = tutorialRevenge && !revengeReady
     ? game.playerField.findIndex(unit => unit && isTutorialFour(unit.card)) : -1;
   const tutorialFour = game.playerField[tutorialFourIndex];
-  const fourMoveGuide = tutorialFour ? { from: laneOf(tutorialFour, tutorialFourIndex), to: tutorialCoverLane } : undefined;
+  const fourMoveGuide = tutorialFour
+    ? { from: laneOf(tutorialFour, tutorialFourIndex), to: tutorialCoverLane, label: "Move the 4 here to cover the 6" }
+    : undefined;
+  const rangerIndex = placingTutorialSix ? game.playerField.findIndex(unit => unit && isTutorialSix(unit.card)) : -1;
+  const ranger = game.playerField[rangerIndex];
+  const rangerLane = ranger ? laneOf(ranger, rangerIndex) : -1;
+  const nearestCoverLane = ranger && openLanes(game.playerField, "back")
+    .filter(lane => tutorialCoveredLane(game.playerField, lane))
+    .sort((a, b) => Math.abs(a - rangerLane) - Math.abs(b - rangerLane))[0];
+  const sixMoveGuide = nearestCoverLane !== undefined && ranger
+    ? { from: rangerLane, to: nearestCoverLane, label: "Move the 6 here to take cover" }
+    : undefined;
   const ownRows = (["front", "back"] as const).map(rank => (
     <BattlefieldRow
       key={rank}
@@ -2581,7 +2592,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       highlightRanged={rank === "back" && isAttacking && !skipAttack}
       rank={rank}
       label={rank === "front" ? "Your front rank" : "Your back rank"}
-      moveGuide={rank === "front" ? fourMoveGuide : undefined}
+      moveGuide={rank === "front" ? fourMoveGuide : sixMoveGuide}
       selected={selected}
       onPick={!isComputer && !showingCombatEffect && !game.pendingAttack && !game.selectedSpecial ? pickUnit : undefined}
       canPick={canPickOwnUnit}
