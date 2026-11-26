@@ -1,4 +1,4 @@
-import type { Card, Rank } from "./game_engine/types";
+import type { Card, Rank, Suit } from "./game_engine/types";
 
 const faceRanks: Partial<Record<Rank, string>> = { A: "ace", J: "jack", Q: "queen", K: "king" };
 
@@ -13,20 +13,27 @@ const characters: Partial<Record<Rank, { sprite: string; className: string; size
   "10": { sprite: "dragon-10", className: "", size: 32 },
 };
 
+const legendarySprites: Partial<Record<Suit, string>> = {
+  clubs: "spear-warrior-9-clubs",
+  diamonds: "wizard-9-diamonds",
+};
+
 export default function CardFace({ card, faceDown = false }: { card?: Card; faceDown?: boolean }) {
   const label = card?.type === "joker"
     ? `${card.color} joker`
     : card && `${faceRanks[card.rank] ?? card.rank} of ${card.suit}`;
 
   const image = faceDown ? "card-back-blue" : label?.replace(/ /g, "-");
+  const legendary = !faceDown && card?.type === "standard" && card.rank === "9";
+  const legendarySprite = legendary ? legendarySprites[card.suit] : undefined;
   const character = faceDown || !card ? undefined
     : card.type === "joker" ? { sprite: "joker-bomb", className: "card-ranger-overlay", size: 50 }
-    : card.rank === "9" && card.suit === "diamonds"
-      ? { sprite: "wizard-9-diamonds", className: "card-ranger-overlay", size: 60 }
+    : legendarySprite
+      ? { sprite: legendarySprite, className: "card-ranger-overlay", size: 60 }
       : characters[card.rank];
 
   return (
-    <div style={{ width: "100%", aspectRatio: "5 / 7", position: "relative" }}>
+    <div data-legendary-card={legendary || undefined} style={{ width: "100%", aspectRatio: "5 / 7", position: "relative" }}>
       {image ? (
         <img key={image} draggable={false}
           src={`${import.meta.env.BASE_URL}assets/cards/${image}.png`}
