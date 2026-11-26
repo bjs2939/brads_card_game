@@ -54,7 +54,7 @@ export default function HomePage() {
   }
 
   function launchMatch(level: Difficulty, training = false, tutorialMatch = false) {
-    stopTutorialAudio();
+    if (!tutorialMatch) stopTutorialAudio();
     modePicker.current?.close();
     music.start("battle");
     setTrainingGrounds(training);
@@ -68,7 +68,7 @@ export default function HomePage() {
   }
 
   if (difficulty) {
-    return <SimpleGame difficulty={difficulty} trainingGrounds={trainingGrounds} tutorial={tutorial} onBack={goHome} music={music} onResultChange={setShowingResult} />;
+    return <SimpleGame difficulty={difficulty} trainingGrounds={trainingGrounds} tutorial={tutorial} tutorialAudio={tutorialAudio.current} onBack={goHome} music={music} onResultChange={setShowingResult} />;
   }
 
   return (

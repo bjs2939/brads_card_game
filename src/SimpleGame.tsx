@@ -1,3 +1,4 @@
+import { TutorialBattleDialogue, tutorialLessons } from "./TutorialIntro";
 import { useCallback, useEffect, useRef, useState } from "react";
 import CardFace from "./CardFace";
 import { Feedback, gameVersion } from "./PlaytestPanels";
@@ -1172,10 +1173,11 @@ function describeMatchActions(previous: Game, current: Game): string[] {
   return lines;
 }
 
-export default function SimpleGame({ difficulty, trainingGrounds = false, tutorial = false, onBack, music, onResultChange }: {
+export default function SimpleGame({ difficulty, trainingGrounds = false, tutorial = false, tutorialAudio = null, onBack, music, onResultChange }: {
   difficulty: Difficulty;
   trainingGrounds?: boolean;
   tutorial?: boolean;
+  tutorialAudio?: AudioContext | null;
   onBack: () => void;
   music: { enabled: boolean; toggle: () => void; setDucked: (ducked: boolean) => void };
   onResultChange: (visible: boolean) => void;
@@ -1199,7 +1201,15 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   useEffect(() => setStackFromHand(false), [game.turn]);
   const [pauseRequested, setPaused] = useState(false);
   const [utilityOpen, setUtilityOpen] = useState(false);
-  const paused = pauseRequested || utilityOpen;
+  const [seenLessons, setSeenLessons] = useState<ReadonlySet<keyof typeof tutorialLessons>>(() => new Set());
+  const tutorialOpening = tutorial && game.turn === 1 && game.phase === "player";
+  const tutorialRank = tutorialOpening ? tutorialDeploymentRanks[game.playerField.filter(Boolean).length] : undefined;
+  const availableLesson = tutorial && game.phase === "player"
+    ? game.step === "move-out" ? tutorialRank
+      : game.turn > 2 && (game.step === "move-up" || game.step === "attack") ? game.step : undefined
+    : undefined;
+  const activeLesson = availableLesson && !seenLessons.has(availableLesson) ? availableLesson : undefined;
+  const paused = pauseRequested || utilityOpen || !!activeLesson;
   const labDialog = useRef<HTMLDialogElement>(null);
   const [labZone, setLabZone] = useState<LabZone>("player");
   const [labCard, setLabCard] = useState(0);
@@ -1315,8 +1325,6 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const [turnTimerEnabled, setTurnTimerEnabled] = useState(false);
   const [phaseSeconds, setPhaseSeconds] = useState(30);
   const phaseClock = useRef({ round: game.round, turn: game.turn, step: game.step, remaining: 30_000 });
-  const tutorialOpening = tutorial && game.turn === 1 && game.phase === "player";
-  const tutorialRank = tutorialOpening ? tutorialDeploymentRanks[game.playerField.filter(Boolean).length] : undefined;
   const tutorialDeployment = tutorialRank && game.player.find(card => card.type === "standard" && card.rank === tutorialRank);
   const timedPhase = !tutorialOpening && turnTimerEnabled && game.phase === "player" && game.step !== "draw" && !outcome &&
     !showingCombatEffect && !warningActive;
@@ -1538,7 +1546,10 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
         if (current.phase === "computer-move-out") {
           let field = [...current.computerField];
           const empty = openLanes(field, "back");
-          const available = current.computer.filter(canDeploy).sort((a, b) => strength(b) - strength(a));
+          const tutorialEnemyOpening = tutorial && current.turn === 2;
+          const available = tutorialEnemyOpening
+            ? current.computer.filter(card => card.type === "standard" && card.rank === "7" && card.suit === "spades")
+            : current.computer.filter(canDeploy).sort((a, b) => strength(b) - strength(a));
           for (const lane of empty) {
             const card = available.shift();
             if (!card) break;
@@ -1565,7 +1576,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             const managed = manageHardShields(current, field, used);
             field = managed.field;
             movedShield = managed.moved;
-          } else {
+          } else if (!tutorialEnemyOpening) {
             const shieldTargets = field.flatMap((unit, index) => unit && canShield(unit) ? [index] : []);
             shieldTargets.sort((a, b) => laneOf(field[a]!, a) - laneOf(field[b]!, b));
             const shields = current.computer.filter(isShield);
@@ -1654,7 +1665,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     }, game.turn <= 2 ? 2500 : game.phase === "computer-attack" ? 1800 : 1600);
 
     return () => window.clearTimeout(timer);
-  }, [game.phase, game.turn, isComputer, outcome, showingCombatEffect, warningActive, difficulty, paused]);
+  }, [game.phase, game.turn, isComputer, outcome, showingCombatEffect, warningActive, difficulty, paused, tutorial]);
 
   function playCard(card: Card) {
     setGame(current => {
@@ -2057,6 +2068,16 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
         return `Back rank empty. Advancing to ${turnSteps[moveOutOrAttack(game)]}…`;
       }
       if (!openLanes(game.playerField, "front").length) return `Front rank full. Advancing to ${turnSteps[moveOutOrAttack(game)]}…`;
+      if (tutorial && game.turn === 3 && selected === null && game.playerField.some((unit, index) =>
+        unit?.card.type === "standard" && unit.card.rank === "6" && fieldRank(unit, index) === "back"
+      )) {
+        const forward = game.playerField.filter((unit, index) =>
+          unit?.card.type === "standard" && (unit.card.rank === "4" || unit.card.rank === "5") && fieldRank(unit, index) === "front"
+        ).length;
+        return forward === 2 && nextStep
+          ? `Locke: The 4 and 5 are up front. Leave the 6 here and press Next: ${turnSteps[nextStep]}.`
+          : "Locke: Move the 5 and 4 up. Keep the 6 of Hearts in the back rank.";
+      }
       return selected === null
         ? canDeployFromHand && game.player.some(canDeploy)
           ? "Select a back-rank card to move up, or play from your hand to skip to Move Out."
@@ -2122,6 +2143,10 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
 
   return (
     <main ref={board} className="simple-game-table" data-paused={paused} onClickCapture={unlockSound}>
+      {activeLesson && (
+        <TutorialBattleDialogue key={activeLesson} lesson={activeLesson} audio={soundEnabled ? tutorialAudio : null}
+          onDone={() => setSeenLessons(current => new Set([...current, activeLesson]))} />
+      )}
       <Feedback floating onOpenChange={setUtilityOpen}
         context={`Version ${gameVersion} · ${modeLabel} · Turn ${Math.ceil(game.turn / 2)} · Deck ${game.drawPile.length} · Player health ${health(game.player, game.playerField)} · Opponent health ${health(game.computer, game.computerField)}`} />
       {trainingGrounds && (
@@ -2274,7 +2299,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             : "Both sides ran out of cards."}</p>
           {game.result && <p>{game.result}</p>}
           <div className="match-result-actions">
-            <button onClick={() => setGame(startGame(tutorial))}>Play Again</button>
+            <button onClick={() => { setSeenLessons(new Set()); setGame(startGame(tutorial)); }}>Play Again</button>
             <button onClick={onBack}>Back to Home</button>
           </div>
         </section>

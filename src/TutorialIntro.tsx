@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAudioForeground } from "./useGameSound";
 import "./TutorialIntro.css";
 
@@ -7,12 +7,13 @@ const advisors = {
   garrison: { name: "Commander Garrison", image: "garrison.png" },
 };
 
-const introduction = [
+type DialogueLine = { speaker: keyof typeof advisors; text: string };
+
+const introduction: readonly DialogueLine[] = [
   { speaker: "locke", text: "Name’s Locke. Thief. I got caught, and now teaching you cards counts as community service. Apparently my other suggestion, stealing back the evidence, was a nonstarter." },
   { speaker: "garrison", text: "Commander Garrison. I was ordered to supervise. Believe me, I asked whether there was a siege I could attend instead." },
   { speaker: "locke", text: "Good news, Commander: your wish came true. The player’s castle is under attack. Leave the battlefield empty and the enemy can march right into the castle." },
   { speaker: "garrison", text: "We each start by drawing five cards. Your opponent keeps their hand face down. Once you’ve seen your hand, I’ll show you where to deploy your soldiers." },
-  { speaker: "locke", text: "Five cards and one extremely enthusiastic supervisor. Try to contain your excitement, Commander." },
   { speaker: "garrison", text: "The court will be delighted to hear it. Draw your opening five cards." },
 ] as const;
 
@@ -33,10 +34,71 @@ function playTypingTick(audio: AudioContext, lowerPitch: boolean) {
   tone.onended = () => { tone.disconnect(); volume.disconnect(); };
 }
 
-export default function TutorialIntro({ audio, onDeal, onExit }: { audio: AudioContext | null; onDeal: () => void; onExit: () => void }) {
+export default function TutorialIntro({ audio, onDeal, onExit }: {
+  audio: AudioContext | null;
+  onDeal: () => void;
+  onExit: () => void;
+}) {
+  return (
+    <main className="tutorial-intro">
+      <div className="tutorial-field" aria-hidden="true">
+        {ranks.map((rank, index) => (
+          <div className={index < 2 ? "tutorial-rank tutorial-enemy-rank" : "tutorial-rank"} key={rank}>
+            <span>{rank}</span>
+            <div><i /><i /><i /></div>
+          </div>
+        ))}
+      </div>
+      <TutorialDialogue lines={introduction} audio={audio} actionLabel="Draw five cards" onDone={onDeal} onExit={onExit} />
+    </main>
+  );
+}
+
+export const tutorialLessons = {
+  "4": [
+    { speaker: "garrison", text: "Now that your cards are dealt, select the highlighted 4 in your hand. It will deploy to an empty slot in your back rank." },
+    { speaker: "locke", text: "That’s the row closest to you. Try not to look too disappointed, Commander. I was listening." },
+  ],
+  "5": [{ speaker: "locke", text: "One soldier in place. Select the highlighted 5 and we’ll have two. I was told that counting out loud builds confidence." }],
+  "6": [{ speaker: "garrison", text: "Deploy your 6 to fill the last slot. Your turn will end once your back rank is full." }],
+  "move-up": [
+    { speaker: "garrison", text: "All three soldiers are deployed. Select them one at a time and move them up to the front rank. All three, Locke." },
+    { speaker: "locke", text: "Hold on! Let’s be sneaky. Your 6 of Hearts can attack the enemy front rank from behind our lines. Move up the 5 and the 4, and leave the 6 in the back." },
+  ],
+  "attack": [
+    { speaker: "locke", text: "Time to attack. Select a front-rank number card or your 6 of Hearts in the back rank, then choose an enemy target. Attacking usually ends your turn." },
+    { speaker: "garrison", text: "Check the Weapon Triangle before you strike. In Easy mode, you’ll get a warning if a face-up target is immune." },
+  ],
+} satisfies Record<string, readonly DialogueLine[]>;
+
+export function TutorialBattleDialogue({ lesson, audio, onDone }: {
+  lesson: keyof typeof tutorialLessons;
+  audio: AudioContext | null;
+  onDone: () => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (dialog.current && !dialog.current.open) dialog.current.showModal();
+  }, []);
+
+  return (
+    <dialog ref={dialog} className="tutorial-battle-dialog" aria-labelledby="tutorial-title"
+      onCancel={event => { event.preventDefault(); }}>
+      <TutorialDialogue lines={tutorialLessons[lesson]} audio={audio} actionLabel="Resume match" onDone={onDone} />
+    </dialog>
+  );
+}
+
+function TutorialDialogue({ lines, audio, actionLabel, onDone, onExit }: {
+  lines: readonly DialogueLine[];
+  audio: AudioContext | null;
+  actionLabel: string;
+  onDone: () => void;
+  onExit?: () => void;
+}) {
   const [index, setIndex] = useState(0);
-  const { speaker, text } = introduction[index];
-  const last = index === introduction.length - 1;
+  const { speaker, text } = lines[index];
+  const last = index === lines.length - 1;
   const [visibleLength, setVisibleLength] = useState(0);
   const [sound, setSound] = useState(true);
   const [reducedMotion] = useState(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -66,7 +128,7 @@ export default function TutorialIntro({ audio, onDeal, onExit }: { audio: AudioC
     if (typing) {
       setVisibleLength(text.length);
     } else if (last) {
-      onDeal();
+      onDone();
     } else {
       setVisibleLength(0);
       setIndex(index + 1);
@@ -74,16 +136,7 @@ export default function TutorialIntro({ audio, onDeal, onExit }: { audio: AudioC
   }
 
   return (
-    <main className="tutorial-intro">
-      <div className="tutorial-field" aria-hidden="true">
-        {ranks.map((rank, index) => (
-          <div className={index < 2 ? "tutorial-rank tutorial-enemy-rank" : "tutorial-rank"} key={rank}>
-            <span>{rank}</span>
-            <div><i /><i /><i /></div>
-          </div>
-        ))}
-      </div>
-      <section className="tutorial-overlay" role="dialog" aria-modal="true" aria-labelledby="tutorial-title"
+      <section className="tutorial-overlay" role={onExit ? "dialog" : undefined} aria-modal={onExit ? true : undefined} aria-labelledby={onExit ? "tutorial-title" : undefined}
         onKeyDown={event => {
           if (event.key === "ArrowLeft") { event.preventDefault(); previous(); }
           if (event.key === "ArrowRight" && (!last || typing)) { event.preventDefault(); next(); }
@@ -109,15 +162,14 @@ export default function TutorialIntro({ audio, onDeal, onExit }: { audio: AudioC
             <div className="tutorial-controls">
               {audio && <button type="button" className="playtest-button" aria-pressed={sound}
                 onClick={() => setSound(current => !current)}>Typing sound {sound ? "on" : "off"}</button>}
-              <button type="button" className="playtest-button" onClick={onExit}>Exit tutorial</button>
+              {onExit && <button type="button" className="playtest-button" onClick={onExit}>Exit tutorial</button>}
               <button type="button" className="playtest-button" disabled={index === 0} onClick={previous}>Back</button>
               <button type="button" className="playtest-button tutorial-next" autoFocus onClick={next}>
-                {typing ? "Show full line" : last ? "Draw five cards" : "Next"}
+                {typing ? "Show full line" : last ? actionLabel : "Next"}
               </button>
             </div>
           </div>
         </div>
       </section>
-    </main>
   );
 }

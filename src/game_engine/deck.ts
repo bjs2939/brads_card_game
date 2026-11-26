@@ -32,7 +32,7 @@ export function createTutorialDeck(): Card[] {
     ["6", "hearts"], ["7", "spades"],
     ["J", "spades"], ["Q", "diamonds"],
     ["7", "clubs"], ["5", "diamonds"],
-    ["6", "diamonds"], ["8", "hearts"],
+    ["8", "clubs"], ["8", "hearts"],
   ];
   const planned = opening.map(([rank, suit]): Card => ({ type: "standard", rank, suit }));
   const remaining = cards.filter(card => !planned.some(placed =>

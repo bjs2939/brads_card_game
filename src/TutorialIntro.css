@@ -94,3 +94,16 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+.tutorial-battle-dialog {
+  width: min(calc(100% - 2rem), 40rem);
+  max-height: calc(100dvh - 2rem);
+  box-sizing: border-box;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff3d5;
+}
+
+.tutorial-battle-dialog::backdrop { background: #080f1ac9; }
+.tutorial-battle-dialog .tutorial-overlay { padding: 0; background: none; }
