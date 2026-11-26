@@ -1808,9 +1808,31 @@
 }
 
 .convert-status {
-  padding: 0.45rem 0.65rem;
-  color: #ffe5a6;
-  font: 700 0.8rem/1.4 system-ui, sans-serif;
+  display: grid;
+  gap: 0.2rem;
+  margin: 0.6rem 0;
+  padding: 0.65rem;
+  border: 1px solid #e1ad55;
+  border-radius: 0.5rem;
+  background: #493119;
+  color: #fff1ca;
+  font: 680 0.82rem/1.4 system-ui, sans-serif;
+}
+.convert-status strong { color: #ffd98f; font-size: 1rem; }
+.simple-game-stack-card[data-convert-recovering] > button:not(.simple-game-shield-card) {
+  transform: rotate(90deg) scale(0.69);
+}
+.recovering-knight-label {
+  position: absolute;
+  z-index: 5;
+  top: 0.18rem;
+  right: 0.16rem;
+  padding: 0.15rem 0.28rem;
+  border-radius: 0.25rem;
+  background: #493119;
+  color: #ffe4ad;
+  font: 750 clamp(0.55rem, 1.8vw, 0.75rem)/1.2 system-ui, sans-serif;
+  pointer-events: none;
 }
 
 .match-setup label {
@@ -1953,4 +1975,17 @@
 @keyframes match-coin-spin {
   from { transform: rotateX(0deg); }
   to { transform: rotateX(var(--coin-landing)); }
+}
+
+button.simple-game-shield-card {
+  padding: 0;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  pointer-events: auto;
+  cursor: pointer;
+}
+button.simple-game-shield-card:is(:hover, :focus-visible, [aria-pressed="true"]),
+.shield-receiver {
+  box-shadow: 0 0 0 2px #f7d487, 0 0 0.65rem #ffcc7099;
 }

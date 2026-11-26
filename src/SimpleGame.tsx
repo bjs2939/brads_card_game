@@ -71,9 +71,14 @@ type DraggedCard = { from: "hand"; card: Card } | { from: "field"; index: number
 type ShieldLayer = { card: Card; revealed: boolean };
 type Unit = { card: Card; revealed: boolean; shields?: ShieldLayer[]; fourShieldBroken?: boolean; lane?: number };
 type Field = (Unit | null)[];
+type PlayerMovement = { step: TurnStep } & (
+  { kind: "deploy"; card: Card; handIndex: number } |
+  { kind: "advance"; cards: Card[]; backLane: number }
+);
 type Game = ReturnType<typeof dealSimpleGame> & {
   playerField: (Unit | null)[];
   backRankAtTurnStart: Card[];
+  movements?: PlayerMovement[];
   computerField: (Unit | null)[];
   computerStacked?: boolean;
   lastComputerRetreat?: Card;
@@ -104,7 +109,7 @@ type Game = ReturnType<typeof dealSimpleGame> & {
   pendingAttack?: { attacker: number; target: number; isStack: boolean; choices?: number[][]; victims?: number[]; choosingShield?: true; shieldIndex?: number; convert?: boolean };
   selectedSpecial: Card | null;
   convertSelected?: boolean;
-  noAttackTurn?: Partial<Record<Side, number>>;
+  convertRecovery?: Partial<Record<Side, { turn: number; knights: Card[] }>>;
   sound?: { cue: GameSound; lightning?: boolean };
   specialStrike?: { card: Card; target: Card; attachments: Card[]; kind: "ace" | "king"; side: Side; blocked: boolean; turn: number };
   advantage?: boolean;
@@ -312,7 +317,7 @@ function canAttackFrom(attacker: Unit, from: number, field: Field, castleCards: 
 }
 
 function attackRestricted(game: Game, side: Side = "player") {
-  return game.noAttackTurn?.[side] === game.turn;
+  return game.convertRecovery?.[side]?.turn === game.turn;
 }
 
 function isHolyKnight(card: Card) {
@@ -382,6 +387,52 @@ function openingPlaysExhausted(game: Game, tutorial: boolean) {
   return !hasMoveOutAction(game) && !canAttachShield && !game.player.some(card => hasHandStack(game.playerField, card));
 }
 
+function recordMovement(game: Game, movement: PlayerMovement) {
+  return [...(game.movements ?? []).slice(-2), movement];
+}
+
+function clearMovementEntries(field: Field, entries: { unit: Unit; index: number }[]): Field {
+  const next = [...field];
+  for (const { index } of entries) next[index] = null;
+  const lanes = new Set(entries.map(({ unit, index }) => laneOf(unit, index)));
+  for (const lane of lanes) {
+    const lead = laneCards(next, lane)[0];
+    if (!next[lane] && lead) {
+      next[lead.index] = null;
+      next[lane] = { ...lead.unit, lane };
+    }
+  }
+  return next;
+}
+
+function undoPlayerMovement(game: Game): Game {
+  const movement = game.movements?.at(-1);
+  if (!movement || !canDeployThisPhase(game)) return game;
+  const reset = advancePlayerStep(game, movement.step);
+  const movements = game.movements?.slice(0, -1);
+  if (movement.kind === "deploy") {
+    const index = game.playerField.findIndex(unit => unit?.card === movement.card);
+    const unit = game.playerField[index];
+    if (!unit) return game;
+    const player = [...game.player];
+    player.splice(movement.handIndex, 0, unit.card, ...(unit.shields ?? []).map(layer => layer.card));
+    return { ...reset, player, movements, playerField: clearMovementEntries(game.playerField, [{ unit, index }]),
+      result: unit.shields?.length ? "Deployment undone. The card and its shields returned to your hand." : "Deployment undone." };
+  }
+
+  const open = openLanes(game.playerField, "back");
+  const lane = open.includes(movement.backLane) ? movement.backLane : open[0];
+  if (lane === undefined) return { ...game, result: "Undo requires an empty back-rank slot." };
+  const entries = game.playerField.flatMap((unit, index) =>
+    unit && fieldRank(unit, index) === "front" && movement.cards.includes(unit.card) ? [{ unit, index }] : []);
+  if (entries.length !== movement.cards.length) return game;
+  const playerField = clearMovementEntries(game.playerField, entries);
+  const [lead, ...rest] = entries;
+  playerField[lane] = { ...lead.unit, lane };
+  return { ...reset, movements,
+    playerField: rest.reduce((field, { unit }) => addToStack(field, unit, lane), playerField), result: "Forward move undone." };
+}
+
 function moveUp(field: Field, from: number, to: number): Field {
   if (!rankLanes.back.includes(from) || !openLanes(field, "front").includes(to)) return field;
   const moving = laneCards(field, from);
@@ -424,6 +475,8 @@ function promoteUnit(game: Game, index: number, lane: number): Game {
   if (field === game.playerField) return game;
   return {
     ...game, playerField: field, selected: null,
+    movements: recordMovement(game, { kind: "advance", step: game.step, backLane: laneOf(unit, index),
+      cards: laneCards(game.playerField, laneOf(unit, index)).map(entry => entry.unit.card) }),
     step: canMoveUp(field) ? game.step : moveOutOrAttack({ ...game, playerField: field }),
     sound: { cue: "play" },
   };
@@ -452,18 +505,23 @@ function stackOnto(game: Game, source: DraggedCard, target: number): Game {
   const lane = laneOf(unit, target);
   let playerField: Field;
   let player = game.player;
+  let movements = game.movements;
   if (source.from === "hand") {
     if (fieldRank(unit, target) !== "back" ||
         !matchesStack(source.card, unit.card) || !player.includes(source.card)) return game;
     playerField = addToStack(game.playerField, deploy(source.card), lane);
+    movements = recordMovement(game, { kind: "deploy", step: game.step, card: source.card, handIndex: player.indexOf(source.card) });
     player = player.filter(card => card !== source.card);
   } else {
     const moving = game.playerField[source.index];
     if (!moving || !canMoveIntoStack(game, source.index, target)) return game;
     playerField = addToStack(game.playerField, moving, lane, source.index);
+    if (fieldRank(moving, source.index) === "back" && fieldRank(unit, target) === "front") {
+      movements = recordMovement(game, { kind: "advance", step: game.step, cards: [moving.card], backLane: laneOf(moving, source.index) });
+    }
   }
   return {
-    ...game, player, playerField, selected: null, selectedStack: null, selectedShield: null,
+    ...game, player, playerField, movements, selected: null, selectedStack: null, selectedShield: null,
     movingStack: false, result: "Stack combined its attack power.", sound: { cue: "stack" },
   };
 }
@@ -902,7 +960,7 @@ function resolveAttack(game: Game, side: Side, attackerIndex: number, targetInde
     : undefined;
   const fourShieldHit = !!builtInOwner;
   const shieldAnimation = blast ? undefined
-    : outer ? { card: shieldHit || survivingShields[shieldIndex]?.revealed ? outer.card : undefined }
+    : outer ? { card: convert || shieldHit || survivingShields[shieldIndex]?.revealed ? outer.card : undefined }
     : builtInOwner ? { card: builtInOwner.unit.card, builtIn: true as const } : undefined;
   const defendedUnit = !blast ? shieldOwner?.unit ?? builtInOwner?.unit ?? defender : defender;
   const defeated = blast || (attackerWins && !outer && !fourShieldHit);
@@ -912,10 +970,10 @@ function resolveAttack(game: Game, side: Side, attackerIndex: number, targetInde
       discarded.push(...(unit.shields ?? []).map(layer => layer.card), unit.card);
     }
   }
-  if (shieldHit) discarded.push(shieldHit.card);
+  if (shieldHit && !convert) discarded.push(shieldHit.card);
   if (blast) discarded.push(...(defender.shields ?? []).map(layer => layer.card));
   const defeatedSlots = new Set(defeated ? victims ?? [targetIndex] : []);
-  const recruited = convert && defeated && !blast ? defender.card : undefined;
+  const recruited = convert && !blast ? shieldHit ? shieldHit.card : defeated ? defender.card : undefined : undefined;
   for (const index of defeatedSlots) {
     const card = game[defenderField][index]!.card;
     if (card !== recruited) discarded.push(card);
@@ -928,6 +986,11 @@ function resolveAttack(game: Game, side: Side, attackerIndex: number, targetInde
   );
   const defending = game[defenderField].map((unit, index) => {
     if (!unit || defeatedSlots.has(index)) return null;
+    if (convert && laneOf(unit, index) === defenderLane) {
+      const shields = index === shieldOwner?.index ? survivingShields : unit.shields;
+      return { ...unit, shields: shields?.map(layer => ({ ...layer, revealed: true })), revealed: true,
+        fourShieldBroken: index === builtInOwner?.index || unit.fourShieldBroken };
+    }
     if (index === shieldOwner?.index) {
       return { ...unit, shields: survivingShields, revealed: true };
     }
@@ -936,12 +999,21 @@ function resolveAttack(game: Game, side: Side, attackerIndex: number, targetInde
   });
   const nextSide = side === "player" ? "computer" : "player";
   const whoAttacked = side === "player" ? "You attacked" : "The computer attacked";
+  const nextRecoveryTurn = game.turn + 2;
+  const priorRecovery = game.convertRecovery?.[side];
+  const convertRecovery = recruited ? {
+    ...game.convertRecovery,
+    [side]: {
+      turn: nextRecoveryTurn,
+      knights: [...(priorRecovery?.turn === nextRecoveryTurn ? priorRecovery.knights : []), attacker.card],
+    },
+  } : game.convertRecovery;
   return {
     ...game,
     [attackerField]: attacking,
     [side]: recruited ? [...game[side], recruited] : game[side],
     convertSelected: undefined,
-    noAttackTurn: convert ? { ...game.noAttackTurn, [side]: game.turn + 2 } : game.noAttackTurn,
+    convertRecovery,
     [defenderField]: defending,
     discardPile: discarded.length ? [...game.discardPile, ...discarded] : game.discardPile,
     selected: null,
@@ -1030,7 +1102,7 @@ function drawForTurn(game: Game, side: "player" | "computer"): Game {
   const backRankAtTurnStart = side === "player"
     ? game.playerField.flatMap((unit, index) => unit && fieldRank(unit, index) === "back" ? [unit.card] : [])
     : [];
-  const turn = { ...game, turn: game.turn + 1, step: "draw" as const, backRankAtTurnStart };
+  const turn = { ...game, turn: game.turn + 1, step: "draw" as const, backRankAtTurnStart, movements: undefined };
   if (!card) {
     const step = side === "player" ? playerStepAfterDraw(turn) : "move-up";
     return { ...turn, step, drewCard: false, drawnCard: undefined };
@@ -1075,6 +1147,7 @@ function finishPlayerTurn(game: Game): Game {
 }
 
 function finishPlayerAttack(game: Game): Game {
+  game = { ...game, movements: undefined };
   if (game.extraAttack && !matchOutcome(game)) {
     return {
       ...game, phase: "player", step: "attack", extraAttack: false, selected: null, selectedSpecial: null,
@@ -1138,7 +1211,7 @@ function CardDetails({ card, layers }: { card: Card | null | undefined; layers: 
       case "4": abilities.push("Built-in shield: absorbs the first non-immune regular hit."); break;
       case "5": abilities.push("Joker immunity: survives a Joker trap without losing its shields."); break;
       case "6": abilities.push("Range: 2. Attack the enemy front rank from your back rank, or reach the enemy back rank from your front rank past occupied slots."); break;
-      case "7": abilities.push("Convert: win a normal attack to recruit the defender into your hand. Using Convert locks offensive actions on your next turn."); break;
+      case "7": abilities.push("Convert: reveal the target stack and its shields. Win to recruit the defender or the shield you broke into your hand. A successful recruit locks your next turn’s offensive actions."); break;
       case "10": abilities.push("A 2 is immune to this card and can defeat it."); break;
     }
     const favored = suitAdvantage[card.suit];
@@ -1204,11 +1277,14 @@ function BattlefieldRevealEffect({ card }: { card: Card }) {
     : <LegendaryLightning />;
 }
 
-function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick, canPick, onPickEmpty, canDrag, onDrag, onDragEnd, onDrop, onDropEmpty, onInspect, inspected, onDoublePick, highlighted = false, highlightRanged = false, moveGuide, onTouchRearrange, revealedEffectCards }: {
+function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick, canPick, onPickEmpty, canDrag, onDrag, onDragEnd, onDrop, onDropEmpty, onInspect, inspected, onDoublePick, highlighted = false, highlightRanged = false, moveGuide, onTouchRearrange, revealedEffectCards, onPickShield, movingShield, recoveringKnights }: {
   onInspect?: (card: Card | null) => void;
   inspected?: Card | null;
   units: Field;
   revealedEffectCards?: readonly Card[];
+  onPickShield?: (index: number, layer: ShieldLayer) => void;
+  movingShield?: Game["movingShield"];
+  recoveringKnights?: readonly Card[];
   label: string;
   rank: FieldRank;
   onPickEmpty?: (lane: number) => void;
@@ -1300,6 +1376,7 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
               <div className="simple-game-stack-cards">
                 {entries.map(({ unit, index }) => {
                   const faceDown = !unit.revealed;
+                  const recovering = recoveringKnights?.includes(unit.card);
                   const visible = opponent && faceDown ? null : unit.card;
                   const pickable = !!onPick && (!canPick || canPick(unit, index));
                   const horizontalFour = !faceDown && hasFourShield(unit);
@@ -1324,57 +1401,63 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
                           {privateCard.type === "joker" ? "Joker" : `${privateCard.rank}${suitSymbols[privateCard.suit]}`}
                         </span>
                       )}
-                      {shieldLayers.length > 0 && (
-                        <span
-                          className={separateShields ? "attached-shields attached-shields-separate" : "attached-shields"}
-                          style={separateShields ? { paddingTop: `${(shieldLayers.length - 1) * 0.38}rem` } : undefined}
-                        >
-                          {shieldLayers.map((layer, layerIndex, layers) => (
-                            <span
-                              key={layer.card.type === "standard" ? `${layer.card.rank}-${layer.card.suit}` : layerIndex}
-                              className="simple-game-shield-card"
-                              style={{ bottom: `${(layers.length - layerIndex - 1) * 0.38}rem` }}
-                              data-card-position={`${opponent ? "computerField" : "playerField"}-shield-${index}-${layerIndex}`}
-                            >
-                              <span className="simple-game-shield-art">
-                                <CardFace card={layer.revealed ? layer.card : undefined} faceDown={!layer.revealed} />
-                              </span>
-                              <img className="attached-shield-sprite"
-                                src={`${import.meta.env.BASE_URL}assets/effects/shield-jq.gif`}
-                                width={32} height={32} alt="" draggable={false} />
-                              {((unit.revealed && isNumber(unit.card)) || layer.revealed) && (
-                                <span className="attached-shield-strength"
-                                  data-suit={layer.revealed && layer.card.type === "standard" ? layer.card.suit : undefined}>
-                                  {unit.revealed && isNumber(unit.card) ? strength(unit.card) : ""}
-                                  {layer.revealed && layer.card.type === "standard" ? suitSymbols[layer.card.suit] : ""}
-                                </span>
-                              )}
-                              {!opponent && layerIndex === layers.length - 1 && layers.some(shield => !shield.revealed) && (
-                                <span className="private-shield-labels">
-                                  {[...layers].reverse().map(({ card, revealed }) =>
-                                    !revealed && card.type === "standard" ? (
-                                      <span key={`${card.rank}-${card.suit}`} data-suit={card.suit}
-                                        aria-label={`${card.rank} of ${card.suit}, visible only to you`}>
-                                        {card.rank}{suitSymbols[card.suit]}
-                                      </span>
-                                    ) : null
-                                  )}
-                                </span>
-                              )}
-                              {layerIndex === layers.length - 1 && <span className="simple-game-shield">
-                                {layers.length === 1 ? "Shield" : `${layers.length} Shields`}
-                              </span>}
-                            </span>
-                          ))}
-                        </span>
-                      )}
                     </>
                   );
+                  const ShieldControl = onPickShield ? "button" : "span";
+                  const shields = shieldLayers.length > 0 && (
+                    <span
+                      className={separateShields ? "attached-shields attached-shields-separate" : "attached-shields"}
+                      style={separateShields ? { paddingTop: `${(shieldLayers.length - 1) * 0.38}rem` } : undefined}
+                    >
+                      {shieldLayers.map((layer, layerIndex, layers) => (
+                        <ShieldControl
+                          key={layer.card.type === "standard" ? `${layer.card.rank}-${layer.card.suit}` : layerIndex}
+                          className="simple-game-shield-card"
+                          type={onPickShield ? "button" : undefined}
+                          aria-label={onPickShield ? `Move ${labCardName(layer.card)} shield` : undefined}
+                          aria-pressed={onPickShield ? movingShield?.layer === layer : undefined}
+                          onClick={onPickShield ? () => onPickShield(index, layer) : undefined}
+                          style={{ bottom: `${(layers.length - layerIndex - 1) * 0.38}rem` }}
+                          data-card-position={`${opponent ? "computerField" : "playerField"}-shield-${index}-${layerIndex}`}
+                        >
+                          <span className="simple-game-shield-art">
+                            <CardFace card={layer.revealed ? layer.card : undefined} faceDown={!layer.revealed} />
+                          </span>
+                          <img className="attached-shield-sprite"
+                            src={`${import.meta.env.BASE_URL}assets/effects/shield-jq.gif`}
+                            width={32} height={32} alt="" draggable={false} />
+                          {((unit.revealed && isNumber(unit.card)) || layer.revealed) && (
+                            <span className="attached-shield-strength"
+                              data-suit={layer.revealed && layer.card.type === "standard" ? layer.card.suit : undefined}>
+                              {unit.revealed && isNumber(unit.card) ? strength(unit.card) : ""}
+                              {layer.revealed && layer.card.type === "standard" ? suitSymbols[layer.card.suit] : ""}
+                            </span>
+                          )}
+                          {!opponent && layerIndex === layers.length - 1 && layers.some(shield => !shield.revealed) && (
+                            <span className="private-shield-labels">
+                              {[...layers].reverse().map(({ card, revealed }) =>
+                                !revealed && card.type === "standard" ? (
+                                  <span key={`${card.rank}-${card.suit}`} data-suit={card.suit}
+                                    aria-label={`${card.rank} of ${card.suit}, visible only to you`}>
+                                    {card.rank}{suitSymbols[card.suit]}
+                                  </span>
+                                ) : null
+                              )}
+                            </span>
+                          )}
+                          {layerIndex === layers.length - 1 && <span className="simple-game-shield">
+                            {layers.length === 1 ? "Shield" : `${layers.length} Shields`}
+                          </span>}
+                        </ShieldControl>
+                      ))}
+                    </span>
+                      );
                   return (
                     <div
                       key={cardKey(unit.card)}
                       className={`simple-game-stack-card${horizontalFour ? " is-horizontal" : ""}${separateShields ? " has-separate-shields" : ""}`}
                       data-card-position={`${opponent ? "computerField" : "playerField"}-${index}`}
+                      data-convert-recovering={recovering || undefined}
                       onDragOver={onDrop ? event => event.preventDefault() : undefined}
                       onDrop={onDrop ? event => { event.preventDefault(); onDrop(index, event.shiftKey); } : undefined}
                     >
@@ -1395,6 +1478,7 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
                           } : undefined}
                           onDragEnd={onDragEnd}
                           className={[
+                            movingShield && movingShield.source !== unit.card && canShield(unit) ? "shield-receiver" : "",
                             visible && visible === inspected ? "card-inspected" : "",
                             highlightRanged && unit.card.type === "standard" && unit.card.rank === "6" ? "ranged-attacker" : "",
                           ].filter(Boolean).join(" ")}
@@ -1414,6 +1498,8 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
                           {face}
                         </button>
                       ) : face}
+                      {shields}
+                      {recovering && <span className="recovering-knight-label">Recovering</span>}
                     </div>
                   );
                 })}
@@ -1916,7 +2002,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     !game.movingStack && !!selectedAttacker && !!selectedUnit && isHolyKnight(selectedUnit.card) && opponentHasCards;
   const castleTargeting = !paused && !tutorialGuided && castleAttackerIndex(game) >= 0;
   const choosingHandCard = game.selectedShield || game.selectedStack || game.selectedSpecial;
-  const canReallocateShields = !tutorialGuided && !tutorialOpening && !isComputer && !showingCombatEffect && !game.pendingAttack && !warningActive;
+  const canReallocateShields = !tutorialGuided && !tutorialOpening && !paused && !warningActive && canDeployThisPhase(game);
   const canUseSupport = !tutorialGuided && !tutorialOpening && !isComputer && game.step !== "draw" && !game.pendingAttack && !showingCombatEffect;
   const canActivateCollection = canUseSupport && !paused && !warningActive && !outcome &&
     !playerCollects && game.playerField.filter(isCollector).length >= 3;
@@ -1991,9 +2077,9 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     game.playerField.some((_, index) => canMoveIntoStack(game, selected, index));
 
   const nextStep = tutorialOpening || tutorialGuided ? undefined : nextPlayerStep(game);
-  const moveOutExhausted = !canStackSelected && game.turn > 2 && isMovingOut && !aimingAttack && !game.selectedStack && !game.selectedSpecial && !hasMoveOutAction(game);
-  const moveUpBlocked = !canStackSelected && isMovingUp && !aimingAttack && !game.selectedStack && !game.selectedSpecial && !canMoveUp(game.playerField);
-  const openingExhausted = openingPlaysExhausted(game, tutorial);
+  const moveOutExhausted = !game.movingShield && !canStackSelected && game.turn > 2 && isMovingOut && !aimingAttack && !game.selectedStack && !game.selectedSpecial && !hasMoveOutAction(game);
+  const moveUpBlocked = !game.movingShield && !canStackSelected && isMovingUp && !aimingAttack && !game.selectedStack && !game.selectedSpecial && !canMoveUp(game.playerField);
+  const openingExhausted = !game.movingShield && openingPlaysExhausted(game, tutorial);
   const jokerOnlyTurn = !offenseRestricted && canEndTurn && !showingCombatEffect && hasOnlyJoker(game);
   const skipAttack = !offenseRestricted && canEndTurn && !showingCombatEffect && hasNoAttackOptions(game);
 
@@ -2045,7 +2131,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     if ((!moveOutExhausted && !moveUpBlocked && !openingExhausted && !jokerOnlyTurn && !skipAttack) || outcome || immunityWarningOpen || paused || showingCombatEffect) return;
     const timer = window.setTimeout(() => {
       setGame(current => {
-        if (current.phase !== "player") return current;
+        if (current.phase !== "player" || current.movingShield) return current;
         if (current.step !== "draw" && ((jokerOnlyTurn && hasOnlyJoker(current)) ||
             (skipAttack && hasNoAttackOptions(current)))) {
           return finishPlayerTurn(current);
@@ -2417,6 +2503,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
         ...current,
         step: current.step === "move-up" ? "move-out" : current.step,
         player: current.player.filter(heldCard => heldCard !== card),
+        movements: recordMovement(current, { kind: "deploy", step: current.step, card, handIndex: current.player.indexOf(card) }),
         playerField: field,
         selected: null, selectedShield: null, selectedStack: null, selectedSpecial: null, movingStack: false, movingShield: undefined,
         result: current.step === "move-up" ? "Card deployed. Skipped to Move Out." : current.result,
@@ -3089,6 +3176,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       key={rank}
       units={game.playerField}
       revealedEffectCards={revealedEffectCards}
+      recoveringKnights={offenseRestricted ? game.convertRecovery?.player?.knights : undefined}
       highlighted={rank === "back" ? isMovingUp : isAttacking && !skipAttack}
       highlightRanged={rank === "back" && isAttacking && !skipAttack}
       rank={rank}
@@ -3097,6 +3185,13 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       selected={selected}
       onPick={!isComputer && !showingCombatEffect && !game.pendingAttack && !game.selectedSpecial ? pickUnit : undefined}
       canPick={canPickOwnUnit}
+      movingShield={canReallocateShields ? game.movingShield : undefined}
+      onPickShield={canReallocateShields ? (index, layer) => {
+        const unit = game.playerField[index];
+        if (!unit) return;
+        if (game.movingShield && game.movingShield.source !== unit.card) pickUnit(index);
+        else startShieldMove(unit.card, layer);
+      } : undefined}
       onDoublePick={rank === "back" && isMovingUp ? promoteToOpenSlot : undefined}
       onInspect={inspect}
       inspected={inspected}
@@ -3288,7 +3383,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           setConvertTarget(null);
         }}>
         <h2 id="holy-knight-title">Holy Knight</h2>
-        <p id="holy-knight-description">Win with Convert to send the target to your hand. Using Convert skips your next turn’s offensive actions.</p>
+        <p id="holy-knight-description">Convert reveals the target stack and its shields. Win to recruit the target card or shield into your hand. A successful recruit locks your next turn’s offensive actions.</p>
         <div className="game-mode-options">
           <button autoFocus onClick={() => {
             if (convertTarget !== null) attack(convertTarget, false, undefined, "regular");
@@ -3611,6 +3706,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
               key={rank}
               units={game.computerField}
               revealedEffectCards={revealedEffectCards}
+              recoveringKnights={isComputer && attackRestricted(game, "computer") ? game.convertRecovery?.computer?.knights : undefined}
               rank={rank}
               label={rank === "front" ? "Computer front rank" : "Computer back rank"}
               opponent
@@ -3638,8 +3734,18 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             <span>TURN {Math.ceil(game.turn / 2)} · {isComputer ? "ENEMY" : "PLAYER"} — {skipAttack ? "ENDING TURN" : turnSteps[game.step].toUpperCase()}</span>
           </div>
           {ownRows}
+          {canReallocateShields && game.movingShield && (
+            <div className="turn-controls" role="group" aria-label="Move shield">
+              <span role="status">Choose a highlighted card to receive the shield.</span>
+              <button type="button" className="pause-button"
+                onClick={() => setGame(current => ({ ...current, movingShield: undefined }))}>Cancel</button>
+            </div>
+          )}
           {offenseRestricted && (
-            <p className="convert-status" role="status">Convert recovery turn · You can move, deploy, shield, or retreat.</p>
+            <div className="convert-status" role="status">
+              <strong>Convert Recovery Turn</strong>
+              <span>Move, deploy, shield, or retreat. Attacks and offensive specials return next turn.</span>
+            </div>
           )}
           <div className="turn-controls" role="group" aria-label="Turn controls">
             {!isComputer && nextStep && (
@@ -3678,6 +3784,13 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
               onClick={() => { if (inspectedOwnUnit) retreat(inspectedOwnUnit.card); }}>
               Retreat
             </button>
+            {!tutorial && (
+              <button type="button" className="pause-button"
+                disabled={paused || !canDeployThisPhase(game) || !game.movements?.length}
+                onClick={() => setGame(undoPlayerMovement)}>
+                Undo{game.movements?.length ? ` (${game.movements.length})` : ""}
+              </button>
+            )}
           </div>
         </section>
 
