@@ -126,6 +126,37 @@ export const tutorialLessons = {
     { speaker: "garrison", text: "Select the 8 of Clubs, then attack the revealed 8 of Hearts. Clubs beat Hearts, so your 8 gets +1." },
     { speaker: "locke", text: "Nine beats eight. Where was this arithmetic when I was doing community service paperwork?" },
   ],
+  "break-queen-shield": [
+    { speaker: "locke", text: "Did their 3 of Clubs really just attack our 8? Bold strategy. I assume the strategy was to lose a turn." },
+    { speaker: "garrison", text: "Easy opponents sometimes waste attacks. A weaker card usually can’t defeat a stronger one, so check your power and suit before committing." },
+    { speaker: "locke", text: "Normally Hearts can’t hit Clubs. But that shield has its own suit, and that’s what our ranger will attack first. Select the 6 of Hearts, then target the shielded 3." },
+  ],
+  "take-out-three": [
+    { speaker: "garrison", text: "The shield was a Queen of Diamonds. Diamonds are neutral, so the ranger broke it. The 3 of Clubs is exposed now." },
+    { speaker: "locke", text: "Send our 8 of Clubs against the 3. Same suit, higher power. See? We learn from other people’s bad ideas." },
+  ],
+  "press-the-advantage": [
+    { speaker: "locke", text: "Now their 4 tried attacking our 8. I’m beginning to think the enemy commander owes someone community service too." },
+    { speaker: "garrison", text: "Our line is strong enough for now. Keep the rest of your troops in hand and chip away with the cards already on the field." },
+    { speaker: "locke", text: "Then let’s try our 8 of Clubs against that pesky 4 of Spades. Go on, select the 8 and aim at the 4." },
+  ],
+  "clubs-immunity": [
+    { speaker: "garrison", text: "Hold it, you idiot. Clubs can’t hit Spades. The 4 would block the attack and we’d waste our turn." },
+    { speaker: "locke", text: "I was testing you, obviously. Select our 6 of Hearts and aim at the 4 instead. The ranger can keep shooting from the back rank." },
+  ],
+  "replace-cover": [
+    { speaker: "garrison", text: "As expected, their 5 took out the halfling. Slide your 8 of Clubs directly in front of the 6 to defend it. Select the 8, then the empty front-rank slot ahead of the ranger." },
+    { speaker: "locke", text: "The ranger gets a new bodyguard. Now let the 6 take another shot at the 4 of Spades. Its free shield is already gone." },
+  ],
+  "hearts-break-shield": [
+    { speaker: "locke", text: "Their 7 of Hearts just broke the Jack of Spades. Our 8 is still standing. I’d say the Jack did its job, if it were around to hear me." },
+    { speaker: "garrison", text: "Hearts beat Spades. The 7 gained +1 against the shield, reaching its strength of 8. The shield absorbed the hit, so the 8 of Clubs survives." },
+    { speaker: "locke", text: "A 7 of Spades would block our Clubs attack, but this is Hearts. Select your 8 of Clubs and take out their 7 of Hearts." },
+  ],
+  "practice-alone": [
+    { speaker: "garrison", text: "You’re on your own for a few turns. Use the 8 of Clubs or the ranged 6 of Hearts against revealed cards. Check the power and suit before you strike and you’ll be fine." },
+    { speaker: "locke", text: "Look at that. Trusted with the castle, and I’m still doing community service." },
+  ],
 } satisfies Record<string, readonly DialogueLine[]>;
 
 export function TutorialBattleDialogue({ lesson, audio, onDone }: {

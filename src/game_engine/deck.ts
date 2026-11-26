@@ -38,7 +38,11 @@ export function createTutorialDeck(): Card[] {
   const remaining = cards.filter(card => !planned.some(placed =>
     card.type === "standard" && placed.type === "standard" && card.rank === placed.rank && card.suit === placed.suit
   ));
-  return [...planned, ...remaining.map((_, index) => remaining[(index * 17) % remaining.length])];
+  const deck = [...planned, ...remaining.map((_, index) => remaining[(index * 17) % remaining.length])];
+  // Draw the enemy's 7 of Hearts on its third turn so it can deploy before the shield lesson.
+  const seven = deck.findIndex(card => card.type === "standard" && card.suit === "hearts" && card.rank === "7");
+  [deck[15], deck[seven]] = [deck[seven], deck[15]];
+  return deck;
 }
 
 export function dealSimpleGame(deck = shuffleDeck(createFullDeck())) {
