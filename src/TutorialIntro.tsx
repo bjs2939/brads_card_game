@@ -186,6 +186,21 @@ export const tutorialLessons = {
     { speaker: "garrison", text: "Stacks combine power when they attack, but grouping up has a cost. If your attack reaches the combined defense of multiple cards it can hit, they can all go down together." },
     { speaker: "locke", text: "Two 3s make 6. Our 9♥ has enough power to take out both. Select the 9 and hit the exposed stack." },
   ],
+  "blind-nine": [
+    { speaker: "locke", text: "I’m feeling lucky. Select our 9♥ and attack their face-down middle card in the front rank. What’s the worst it could be?" },
+    { speaker: "garrison", text: "I could draw you up a list, but I suspect we’re about to get a demonstration." },
+  ],
+  "raise-dragon": [
+    { speaker: "locke", text: "A 10♥. And it took out our 9♥. I apologize for my extremely confident miscalculation." },
+    { speaker: "garrison", text: "You’re not completely out of luck. We kept our 10♣ in reserve. Move it up to the front rank." },
+  ],
+  "shield-dragon": [
+    { speaker: "garrison", text: "Before attacking, select the J♦ from your hand and attach it to the 10♣. We’d like to keep our strongest card around longer than your last prediction." },
+  ],
+  "queen-double": [
+    { speaker: "locke", text: "Queens have another trick. You can discard one to attack twice in the same turn. Select a Queen from your hand, then press Double Attack." },
+    { speaker: "garrison", text: "Use your shielded 10♣ against the 10♥ first. Then select the 10♣ again and attack the J♣ shield on the 5♦. One turn, two cards taken out." },
+  ],
 } satisfies Record<string, readonly DialogueLine[]>;
 
 export function TutorialBattleDialogue({ lesson, audio, onDone }: {
