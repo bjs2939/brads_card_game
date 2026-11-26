@@ -1071,7 +1071,7 @@ function CardDetails({ card, layers }: { card: Card | null | undefined; layers: 
   );
 }
 
-function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick, canPick, onPickEmpty, canDrag, onDrag, onDragEnd, onDrop, onDropEmpty, onInspect, inspected, onDoublePick, highlighted = false, highlightRanged = false, moveGuide }: {
+function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick, canPick, onPickEmpty, canDrag, onDrag, onDragEnd, onDrop, onDropEmpty, onInspect, inspected, onDoublePick, highlighted = false, highlightRanged = false, moveGuide, onTouchRearrange }: {
   onInspect?: (card: Card | null) => void;
   inspected?: Card | null;
   units: Field;
@@ -1083,6 +1083,7 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
   onDragEnd?: () => void;
   onDrop?: (index: number, rearrange: boolean) => void;
   onDropEmpty?: (lane: number) => void;
+  onTouchRearrange?: (index: number, lane: number) => void;
   opponent?: boolean;
   selected?: number | null;
   onPick?: (index: number) => void;
@@ -1092,8 +1093,52 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
   moveGuide?: { from: number; to: number; label: string };
   canPick?: (unit: Unit, index: number) => boolean;
 }) {
+  const touchDrag = useRef<{ id: number; index: number; x: number; y: number; moved: boolean } | null>(null);
+  const suppressTouchClick = useRef(false);
+  const [touchPreview, setTouchPreview] = useState<{ index: number; x: number; y: number; lane?: number } | null>(null);
+
+  function touchLane(event: React.PointerEvent<HTMLDivElement>) {
+    const slot = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-field-lane]");
+    return slot && event.currentTarget.contains(slot) ? Number(slot.dataset.fieldLane) : undefined;
+  }
+
+  function finishTouchDrag(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = touchDrag.current;
+    if (!drag || drag.id !== event.pointerId) return;
+    touchDrag.current = null;
+    setTouchPreview(null);
+    if (!drag.moved) return;
+    suppressTouchClick.current = true;
+    if (event.type !== "pointerup") return;
+    const lane = touchLane(event);
+    if (lane !== undefined) onTouchRearrange?.(drag.index, lane);
+  }
+
+  const touchedUnit = touchPreview && units[touchPreview.index];
   return (
-    <div role="group" aria-label={label} className={`battlefield-rank ${opponent ? "enemy-rank" : "player-rank"}${highlighted ? " rank-highlighted" : ""}`}>
+    <div role="group" aria-label={label} className={`battlefield-rank ${opponent ? "enemy-rank" : "player-rank"}${highlighted ? " rank-highlighted" : ""}`}
+      onPointerDownCapture={() => { suppressTouchClick.current = false; }}
+      onPointerMove={event => {
+        const drag = touchDrag.current;
+        if (!drag || drag.id !== event.pointerId) return;
+        if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 8) return;
+        drag.moved = true;
+        setTouchPreview({ index: drag.index, x: event.clientX, y: event.clientY, lane: touchLane(event) });
+      }}
+      onPointerUp={finishTouchDrag}
+      onPointerCancel={finishTouchDrag}
+      onLostPointerCapture={finishTouchDrag}
+      onClickCapture={event => {
+        if (!suppressTouchClick.current || event.detail === 0) return;
+        suppressTouchClick.current = false;
+        event.stopPropagation();
+        event.preventDefault();
+      }}>
+      {touchPreview && touchedUnit && (
+        <div className="field-touch-preview" aria-hidden="true" style={{ left: touchPreview.x, top: touchPreview.y }}>
+          <CardFace card={touchedUnit.card} faceDown={!touchedUnit.revealed} />
+        </div>
+      )}
       <p>{label}</p>
       <div style={battlefieldLayout}>
         {rankLanes[rank].map(lane => {
@@ -1107,17 +1152,17 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
             } : {};
             return (
               onPickEmpty ? (
-                <button key={lane} className={`field-slot field-slot-open${arrow ? " cover-move-target" : ""}`} {...dropProps} onClick={() => onPickEmpty(lane)}>
+                <button key={lane} data-field-lane={lane} data-touch-target={touchPreview?.lane === lane || undefined} className={`field-slot field-slot-open${arrow ? " cover-move-target" : ""}`} {...dropProps} onClick={() => onPickEmpty(lane)}>
                   {guide}
                   Move Here
                 </button>
-              ) : <div key={lane} className={`field-slot${arrow ? " cover-move-target" : ""}`} {...dropProps}
+              ) : <div key={lane} data-field-lane={lane} data-touch-target={touchPreview?.lane === lane || undefined} className={`field-slot${arrow ? " cover-move-target" : ""}`} {...dropProps}
                 aria-label={arrow ? moveGuide?.label : "Empty slot"}>{guide}</div>
             );
           }
 
           return (
-            <div key={lane} className="simple-game-stack">
+            <div key={lane} data-field-lane={lane} data-touch-target={touchPreview?.lane === lane || undefined} className="simple-game-stack">
               <div className="simple-game-stack-cards">
                 {entries.map(({ unit, index }) => {
                   const faceDown = !unit.revealed;
@@ -1201,6 +1246,12 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
                     >
                       {pickable || onInspect ? (
                         <button
+                          data-touch-rearrange={onTouchRearrange && canDrag?.(index) ? true : undefined}
+                          onPointerDown={event => {
+                            if (event.pointerType !== "touch" || !event.isPrimary || !onTouchRearrange || !canDrag?.(index)) return;
+                            touchDrag.current = { id: event.pointerId, index, x: event.clientX, y: event.clientY, moved: false };
+                            event.currentTarget.setPointerCapture(event.pointerId);
+                          }}
                           draggable={canDrag?.(index) ?? false}
                           onDragStart={onDrag ? event => {
                             event.dataTransfer.setData("text/plain", "Battlefield card");
@@ -2771,6 +2822,11 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           ((movingReserveToCover || (tutorialRevenge && !revengeReady)) && rank === "front" && !!unit && canPickOwnUnit(unit, index)) ||
           (placingTutorialSix && rank === "back" && !!unit && isTutorialSix(unit.card));
       }}
+      onTouchRearrange={!paused && !warningActive && (canStackFromHand || placingTutorialSix ||
+          ((movingReserveToCover || (tutorialRevenge && !revengeReady)) && rank === "front")) ? (index, lane) => {
+        if ((tutorialRevenge || movingReserveToCover) && lane !== tutorialCoverLane) return;
+        setGame(current => tutorialDuel ? placeTutorialSix(current, index, lane) : moveCoverCard(current, index, lane));
+      } : undefined}
       onDrag={index => { draggedCard.current = { from: "field", index }; }}
       onDragEnd={() => { draggedCard.current = null; }}
       onDrop={canStackFromHand ? dropOnCard : undefined}
