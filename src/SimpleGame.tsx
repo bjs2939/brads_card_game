@@ -1366,6 +1366,8 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const middleFront = rankLanes.front[1];
   const tutorialJoker = tutorial && (game.turn === 35 || game.turn === 37) && game.phase === "player";
   const replacementJoker = tutorialJoker && game.turn === 37;
+  const promoteTutorialJoker = replacementJoker && game.playerField.some((unit, index) =>
+    unit?.card.type === "joker" && unit.card.color === "red" && fieldRank(unit, index) === "back");
   const jokerColor = replacementJoker ? "black" : "red";
   const jokerDeployed = tutorialJoker && game.playerField.some(unit =>
     unit?.card.type === "joker" && unit.card.color === jokerColor);
@@ -1376,7 +1378,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
         !game.attackAnimation ? "ten-cards-left"
     : tutorial && game.phase === "player" && !game.attackAnimation && game.step !== "draw"
       ? tutorialJoker ? replacementJoker
-        ? jokerDeployed ? "attack-enemy-ranger" : "replace-lost-nine"
+        ? promoteTutorialJoker ? "move-joker-up" : jokerDeployed ? "attack-enemy-ranger" : "replace-lost-nine"
         : jokerDeployed ? "protect-the-joker" : "joker-deploy"
         : tutorialBlind ? "blind-nine"
         : tutorialDouble ? !tutorialDragonReady ? "raise-dragon"
@@ -1680,6 +1682,8 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   }
 
   function canPickOwnUnit(unit: Unit, index: number) {
+    if (promoteTutorialJoker) return game.step === "move-up" && fieldRank(unit, index) === "back" &&
+      unit.card.type === "joker" && unit.card.color === "red";
     if (tutorialJoker) return jokerDeployed && game.step === "attack" && fieldRank(unit, index) === "front" &&
       (isTutorialReinforcement(unit.card) || isTutorialClubDragon(unit.card));
     if (tutorialBlind) return game.step === "attack" && isTutorialNine(unit.card);
@@ -2189,6 +2193,12 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       if (!unit || current.phase !== "player" || current.pendingAttack || current.specialStrike) return current;
 
       if ((tutorialBlind || tutorialDouble || tutorialJoker) && !canPickOwnUnit(unit, index)) return current;
+      if (promoteTutorialJoker) {
+        const destination = openLanes(current.playerField, "front")[0];
+        if (destination === undefined) return current;
+        const promoted = promoteUnit(current, index, destination);
+        return promoted === current ? current : advancePlayerStep(promoted, "move-out");
+      }
       if (tutorialNines && !canPickOwnUnit(unit, index)) return current;
       if (tutorialReinforce && !canPickOwnUnit(unit, index)) return current;
       if (tutorialReserveAttack) {
@@ -2572,6 +2582,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     if (transferringTutorialShield) return game.movingShield
       ? "Garrison: Select the 8 of Clubs to receive the Jack."
       : "Locke: Select the shielded 2 to move its Jack.";
+    if (promoteTutorialJoker && game.step !== "draw") return "Garrison: Select the red Joker in your back rank to move it up.";
     if (tutorialJoker && game.step !== "draw") return !jokerDeployed ? "Garrison: Deploy the Joker to the back rank."
       : aimingAttack ? (replacementJoker ? "Locke: Attack the 6♣." : "Locke: Attack the 5♦.")
       : "Locke: Select your 8♠ or 10♣.";
@@ -2751,7 +2762,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       if (!tutorialDragonShielded) return isTutorialDiamondJack(card);
       return !tutorialDoubleReady && isQueen(card);
     }
-    if (tutorialJoker) return isMovingOut && canDeployFromHand && !jokerDeployed && card.type === "joker" && card.color === jokerColor;
+    if (tutorialJoker) return !promoteTutorialJoker && isMovingOut && canDeployFromHand && !jokerDeployed && card.type === "joker" && card.color === jokerColor;
     if (tutorialGuided) return false;
     if (tutorialOpening) return canDeployFromHand && card === tutorialDeployment;
     if (isShield(card)) return canChooseShield || (isJack(card) && canSpy) || (isQueen(card) && canDoubleAttack);

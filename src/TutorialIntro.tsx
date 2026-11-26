@@ -211,6 +211,10 @@ export const tutorialLessons = {
     { speaker: "locke", text: "Except 5s. They’re combat engineers, and they’re immune to the blast. Apparently someone read the safety manual." },
     { speaker: "garrison", text: "Deploy the Joker to your back rank. Then we’ll deal with the enemy 5♦ before it gets any ideas." },
   ],
+  "move-joker-up": [
+    { speaker: "garrison", text: "First, select the red Joker in your back rank. Move it up to fill the gap our nine left in the front rank." },
+    { speaker: "locke", text: "A face-down trap on the front line. Finally, a plan that sounds like community service." },
+  ],
   "replace-lost-nine": [
     { speaker: "locke", text: "I still miss our 9♥. I was getting used to a plan that involved somebody else getting hit." },
     { speaker: "garrison", text: "We lost it to their dragon. Deploy your second Joker to the back rank. Let the enemy take a chance this time." },
