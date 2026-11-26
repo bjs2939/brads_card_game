@@ -1376,6 +1376,8 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const availableLesson = tutorial && game.turn === 2 && game.phase === "computer" ? "enemy-opening"
     : tutorial && game.turn === 34 && game.phase === "computer" && game.deckWarning === undefined &&
         !game.attackAnimation ? "ten-cards-left"
+    : tutorial && game.turn === 38 && game.phase === "computer" && !game.attackAnimation &&
+        game.deckWarning === undefined ? "on-your-own"
     : tutorial && game.phase === "player" && !game.attackAnimation && game.step !== "draw"
       ? tutorialJoker ? replacementJoker
         ? promoteTutorialJoker ? "move-joker-up" : jokerDeployed ? "attack-enemy-ranger" : "replace-lost-nine"

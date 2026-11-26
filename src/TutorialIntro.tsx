@@ -223,6 +223,10 @@ export const tutorialLessons = {
     { speaker: "garrison", text: "Their 6♣ has range. Select your 8♠ or 10♣, then attack the 6♣. That ends your turn." },
     { speaker: "locke", text: "Either one works? This is the sort of decision I was born to make." },
   ],
+  "on-your-own": [
+    { speaker: "garrison", text: "You're on your own for a while. Check the suits and shields before you attack, and pick fights you can win. Keep that up and you'll be fine." },
+    { speaker: "locke", text: "And if a face-down card looks too easy, remember my extremely educational encounter with a dragon." },
+  ],
   "protect-the-joker": [
     { speaker: "locke", text: "The Joker’s in place. Use either your 8♠ or your 10♣ to take out the exposed 5♦. We don’t need the enemy sending a bomb disposal crew." },
   ],
