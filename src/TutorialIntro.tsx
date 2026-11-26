@@ -75,6 +75,7 @@ export const tutorialLessons = {
   ],
   "attack": [
     { speaker: "garrison", text: "The 6 has cover. Time to attack. Their left card has a shield. A shield takes the hit before the soldier behind it. Leave that one alone and aim at the unshielded card in the middle of their back rank." },
+    { speaker: "garrison", text: "An attack almost always ends your turn immediately. Finish moving troops or shifting shields before you strike." },
     { speaker: "locke", text: "Select your 5 of Spades in the front rank, then hit that middle card. I’m sure charging at something we can’t see will go brilliantly." },
   ],
   "counterattack": [
@@ -115,6 +116,10 @@ export const tutorialLessons = {
   "reserve-move-up": [
     { speaker: "garrison", text: "The dragon is down. Move your 8 of Clubs to the front rank. It’s time to deal with that 8 of Hearts the ranger uncovered." },
     { speaker: "locke", text: "I see the 10 of Clubs in your hand. Keep the dragon in reserve for now. We still don’t know what they’re holding or how they’ll use it. Even I don’t show my best trick first." },
+  ],
+  "transfer-shield": [
+    { speaker: "locke", text: "Our halfling’s luck can’t last forever. Let’s move the Jack of Spades shield from the 2 to the 8 of Clubs. I’d rather give our stronger soldier a chance to stick around." },
+    { speaker: "garrison", text: "Either player can reallocate shields between cards on their field before attacking. It’s a free move. Select the shielded 2, then select the 8 to transfer the Jack." },
   ],
   "reserve-attack": [
     { speaker: "garrison", text: "Select the 8 of Clubs, then attack the revealed 8 of Hearts. Clubs beat Hearts, so your 8 gets +1." },

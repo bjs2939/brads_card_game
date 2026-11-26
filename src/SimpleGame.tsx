@@ -1272,6 +1272,9 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
         unit && fieldRank(unit, index) === "front" && !isTutorialDragon(unit.card) && !unit.shields?.length)
     : -1;
   const tutorialReserveAttack = tutorial && game.turn === 11 && game.phase === "player";
+  const reserveShielded = tutorialReserveAttack && game.playerField.some(unit =>
+    unit && isTutorialReserve(unit.card) && unit.shields?.some(layer => isTutorialJack(layer.card)));
+  const transferringTutorialShield = tutorialReserveAttack && game.step === "attack" && !reserveShielded;
   const tutorialGuided = tutorialDuel || tutorialRevenge || tutorialDeployHalfling || tutorialSlayDragon || tutorialReserveAttack;
   const availableLesson = tutorial && game.turn === 2 && game.phase === "computer" ? "enemy-opening"
     : tutorial && game.phase === "player" && !game.attackAnimation && game.step !== "draw"
@@ -1279,7 +1282,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
         : tutorialDeployHalfling && halfling && !seenLessons.has("halfling-shield") ? "halfling-shield"
         : halflingShielded && tutorialDeployHalfling && !seenLessons.has("deploy-reserve") ? "deploy-reserve"
         : reserveDeployed && !game.pendingAttack && !seenLessons.has("ranger-recon") ? "ranger-recon"
-        : tutorialReserveAttack ? game.step === "attack" ? "reserve-attack" : "reserve-move-up"
+        : tutorialReserveAttack ? game.step !== "attack" ? "reserve-move-up" : reserveShielded ? "reserve-attack" : "transfer-shield"
         : tutorialSlayDragon ? game.step === "attack" ? "dragon-attack" : "slay-dragon"
         : tutorialRevenge && !seenLessons.has("counterattack") ? "counterattack"
         : revengeReady && !seenLessons.has("triangle") ? "triangle"
@@ -1540,7 +1543,10 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     if (tutorialDeployHalfling) return reserveDeployed
       ? isTutorialSix(unit.card) : !!game.selectedShield && isTutorialTwo(unit.card);
     if (tutorialSlayDragon) return isTutorialTwo(unit.card);
-    if (tutorialReserveAttack) return isTutorialReserve(unit.card);
+    if (tutorialReserveAttack) {
+      if (transferringTutorialShield && !game.movingShield) return isTutorialTwo(unit.card);
+      return isTutorialReserve(unit.card);
+    }
     if (tutorialRevenge) return revengeReady ? isTutorialSix(unit.card)
       : unit.card.type === "standard" && unit.card.rank === "4" && fieldRank(unit, index) === "front";
     if (tutorialDuel) {
@@ -1920,6 +1926,12 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   }
 
   function pickUnit(index: number) {
+    const shieldSource = game.playerField[index];
+    if (transferringTutorialShield && shieldSource && isTutorialTwo(shieldSource.card)) {
+      const jack = shieldSource.shields?.find(layer => isTutorialJack(layer.card));
+      if (jack) startShieldMove(shieldSource.card, jack);
+      return;
+    }
     setGame(current => {
       const unit = current.playerField[index];
       if (!unit || current.phase !== "player" || current.pendingAttack || current.specialStrike) return current;
@@ -2131,7 +2143,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
 
       if (tutorialReserveAttack) {
         const source = current.selected === null ? null : current.playerField[current.selected];
-        if (current.step !== "attack" || !source || !isTutorialReserve(source.card) ||
+        if (!reserveShielded || current.step !== "attack" || !source || !isTutorialReserve(source.card) ||
             !isTutorialEnemyEight(defender.card)) return current;
       }
 
@@ -2248,6 +2260,9 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
         : halflingShielded ? "Locke: Deploy the 8 of Clubs to the back rank."
         : game.selectedShield ? "Locke: Select the deployed 2 to attach the shield."
           : "Locke: Select your Jack of Spades to shield the 2.";
+    if (transferringTutorialShield) return game.movingShield
+      ? "Garrison: Select the 8 of Clubs to receive the Jack."
+      : "Locke: Select the shielded 2 to move its Jack.";
     if (tutorialReserveAttack && game.step !== "draw") return aimingAttack
       ? "Locke: Attack the revealed 8 of Hearts."
       : game.step === "attack" ? "Garrison: Select your 8 of Clubs."
@@ -2693,7 +2708,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
               canPick={(unit, index) => (!tutorialDuel || index === tutorialTarget) &&
                 (!tutorialRevenge || (revengeReady && isTutorialSeven(unit.card))) &&
                 (!tutorialSlayDragon || isTutorialDragon(unit.card)) &&
-                (!tutorialReserveAttack || isTutorialEnemyEight(unit.card)) && (!tutorialDeployHalfling || index === rangerTarget) && (!!game.selectedSpecial || (
+                (!tutorialReserveAttack || (reserveShielded && isTutorialEnemyEight(unit.card))) && (!tutorialDeployHalfling || index === rangerTarget) && (!!game.selectedSpecial || (
                 !!selectedUnit && selected !== null && canAttackTarget(selectedUnit, selected, game.computerField, index)
               ))}
               onPick={!isComputer && !showingCombatEffect && !game.pendingAttack && !game.movingStack &&
