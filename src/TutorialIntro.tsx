@@ -80,6 +80,8 @@ export const tutorialLessons = {
   "counterattack": [
     { speaker: "locke", text: "Well. That was a 7 of Spades. Our 5 wasn’t strong enough, and their 7 took it out on the counterattack." },
     { speaker: "garrison", text: "That’s a normal risk. A face-down card can hide a stronger soldier. The first attack revealed it, so now you can make your next move with more information." },
+    { speaker: "garrison", text: "Move Up is a reminder to check your formation. Advancing from the back rank is optional, but this is your only chance to do it this turn. Skip it wisely." },
+    { speaker: "locke", text: "This time we only need to slide the 4 sideways. Same rank, free move. Try to contain your relief." },
     { speaker: "garrison", text: "Keep your 6 protected. Move the 4 sideways in the front rank until it’s directly ahead of the 6. If the 4 is already there, congratulations. You’ve anticipated an order." },
   ],
   "triangle": [
