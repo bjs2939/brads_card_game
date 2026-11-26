@@ -1230,15 +1230,13 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const tutorialDuel = tutorial && game.turn === 3 && game.phase === "player";
   const tutorialTarget = rankLanes.back[1];
   const formationReady = tutorialDuel && tutorialFormationReady(game.playerField);
-  const sixInCover = formationReady && game.playerField.some((unit, index) =>
-    unit && isTutorialSix(unit.card) && tutorialCoveredLane(game.playerField, laneOf(unit, index))
-  );
-  const availableLesson = tutorial && game.phase === "player" && !game.attackAnimation && game.step !== "draw"
-    ? game.turn === 5 && game.discardPile.some(isTutorialFive) && !seenLessons.has("counterattack") ? "counterattack"
-      : game.step === "move-out" ? tutorialRank
-      : formationReady && game.step === "move-up" && !seenLessons.has("cover") ? "cover"
-      : tutorialDuel && (game.step === "move-up" || game.step === "attack") ? game.step : undefined
-    : undefined;
+  const availableLesson = tutorial && game.turn === 2 && game.phase === "computer" ? "enemy-opening"
+    : tutorial && game.phase === "player" && !game.attackAnimation && game.step !== "draw"
+      ? game.turn === 5 && game.discardPile.some(isTutorialFive) && !seenLessons.has("counterattack") ? "counterattack"
+        : game.step === "move-out" ? tutorialRank
+        : formationReady && game.step === "move-up" && !seenLessons.has("cover") ? "cover"
+        : tutorialDuel && (game.step === "move-up" || game.step === "attack") ? game.step : undefined
+      : undefined;
   const activeLesson = availableLesson && !seenLessons.has(availableLesson) ? availableLesson : undefined;
   const paused = pauseRequested || utilityOpen || !!activeLesson;
   const labDialog = useRef<HTMLDialogElement>(null);
@@ -1481,9 +1479,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const canStackSelected = canStackFromHand && selected !== null &&
     game.playerField.some((_, index) => canMoveIntoStack(game, selected, index));
 
-  const nextStep = tutorialOpening ? undefined
-    : tutorialDuel ? isMovingUp && sixInCover ? "attack" : undefined
-      : nextPlayerStep(game);
+  const nextStep = tutorialOpening || tutorialDuel ? undefined : nextPlayerStep(game);
   const moveOutExhausted = !canStackSelected && game.turn > 2 && isMovingOut && !aimingAttack && !game.selectedStack && !game.selectedSpecial && !hasMoveOutAction(game);
   const moveUpBlocked = !canStackSelected && isMovingUp && !aimingAttack && !game.selectedStack && !game.selectedSpecial && !canMoveUp(game.playerField);
   const openingBackFilled = game.turn === 1 && isMovingOut && !hasOpenLane;
@@ -1952,21 +1948,28 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     });
   }
 
+  function placeTutorialSix(current: Game, index: number, lane: number) {
+    const unit = current.playerField[index];
+    if (current.turn !== 3 || current.step !== "move-up" || !unit || !isTutorialSix(unit.card) ||
+        !tutorialFormationReady(current.playerField)) return current;
+    if (!tutorialCoveredLane(current.playerField, lane)) {
+      return { ...current, result: "Locke: Keep the 6 in the back rank, behind the 4 or 5." };
+    }
+    const moved = rearrangeRank(current, index, lane);
+    return moved === current ? current : advancePlayerStep(moved, "attack");
+  }
+
   function dropOnEmptyLane(lane: number) {
     const source = draggedCard.current;
     draggedCard.current = null;
     if (source?.from !== "field") return;
-    setGame(current => {
-      if (tutorialDuel && !tutorialCoveredLane(current.playerField, lane)) {
-        return { ...current, result: "Locke: Keep the 6 in the back rank, behind the 4 or 5." };
-      }
-      return rearrangeRank(current, source.index, lane);
-    });
+    setGame(current => tutorialDuel
+      ? placeTutorialSix(current, source.index, lane)
+      : rearrangeRank(current, source.index, lane));
   }
 
   function moveTutorialSix(lane: number) {
-    if (!tutorialCoveredLane(game.playerField, lane) || selected === null) return;
-    setGame(current => rearrangeRank(current, selected, lane));
+    if (selected !== null) setGame(current => placeTutorialSix(current, selected, lane));
   }
 
   function advanceStep() {
@@ -2145,7 +2148,6 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       }
       if (!openLanes(game.playerField, "front").length) return `Front rank full. Advancing to ${turnSteps[moveOutOrAttack(game)]}…`;
       if (tutorialDuel) {
-        if (sixInCover) return "Locke: The 6 has cover. Press Next: Attack.";
         if (formationReady) return "Locke: Move the 6 behind the 4 or 5, keeping it in the back rank.";
         return "Locke: Move the 5 and 4 up. Keep the 6 of Hearts in the back rank.";
       }

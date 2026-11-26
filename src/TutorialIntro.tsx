@@ -61,6 +61,10 @@ export const tutorialLessons = {
   ],
   "5": [{ speaker: "locke", text: "One soldier in place. Select the highlighted 5 and we’ll have two. I was told that counting out loud builds confidence." }],
   "6": [{ speaker: "garrison", text: "Deploy your 6 to fill the last slot. Your turn will end once your back rank is full." }],
+  "enemy-opening": [
+    { speaker: "garrison", text: "Your back rank is full. It’s the opponent’s turn now. They’ll draw and deploy their units while you wait." },
+    { speaker: "locke", text: "Give the computer a few seconds to make its moves. Even the enemy needs time to get organized, apparently." },
+  ],
   "move-up": [
     { speaker: "garrison", text: "All three soldiers are deployed. Select them one at a time and move them up to the front rank. All three, Locke." },
     { speaker: "locke", text: "Hold on! Let’s be sneaky. Your 6 of Hearts can attack the enemy front rank from behind our lines. Move up the 5 and the 4, and leave the 6 in the back." },
@@ -70,7 +74,7 @@ export const tutorialLessons = {
     { speaker: "locke", text: "Put the 6 behind the 4 or the 5 for cover. Drag it into an empty slot in the back rank, or select the 6 and then select the slot." },
   ],
   "attack": [
-    { speaker: "garrison", text: "Their left card has a shield. A shield takes the hit before the soldier behind it. Leave that one alone and aim at the unshielded card in the middle of their back rank." },
+    { speaker: "garrison", text: "The 6 has cover. Time to attack. Their left card has a shield. A shield takes the hit before the soldier behind it. Leave that one alone and aim at the unshielded card in the middle of their back rank." },
     { speaker: "locke", text: "Select your 5 of Spades in the front rank, then hit that middle card. I’m sure charging at something we can’t see will go brilliantly." },
   ],
   "counterattack": [
