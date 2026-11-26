@@ -80,6 +80,12 @@ export const tutorialLessons = {
   "counterattack": [
     { speaker: "locke", text: "Well. That was a 7 of Spades. Our 5 wasn’t strong enough, and their 7 took it out on the counterattack." },
     { speaker: "garrison", text: "That’s a normal risk. A face-down card can hide a stronger soldier. The first attack revealed it, so now you can make your next move with more information." },
+    { speaker: "garrison", text: "Keep your 6 protected. Move the 4 sideways in the front rank until it’s directly ahead of the 6. If the 4 is already there, congratulations. You’ve anticipated an order." },
+  ],
+  "triangle": [
+    { speaker: "locke", text: "Now for the Weapon Triangle. Hearts beat Spades, Spades beat Clubs, and Clubs beat Hearts. Diamonds stay neutral. Sensible of them, really." },
+    { speaker: "garrison", text: "Hearts gain +1 power when attacking Spades. That makes your 6 of Hearts hit for 7, enough to defeat their 7 of Spades. A tie goes to the attacker." },
+    { speaker: "locke", text: "And our 6 can shoot from the back rank. Select it, then select the revealed 7. This time we actually know what we’re shooting at." },
   ],
 } satisfies Record<string, readonly DialogueLine[]>;
 
