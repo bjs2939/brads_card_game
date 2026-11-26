@@ -465,9 +465,9 @@ function isSpecialImmune(suit: Suit, target: Card) {
   return target.type === "joker" || suitAdvantage[target.suit] === suit;
 }
 
-function chooseComputerSpecial(game: Game, hasRegularAttack: boolean) {
+function chooseComputerSpecial(game: Game, hasRegularAttack: boolean, allowBlindPlay = true) {
   const canDevelopField = game.computerField.some(Boolean) || game.computer.some(canDeploy);
-  const mayBlindPlay = !hasRegularAttack && !canDevelopField;
+  const mayBlindPlay = allowBlindPlay && !hasRegularAttack && !canDevelopField;
   const options: { card: Card; index: number; score: number }[] = [];
   for (const special of game.computer) {
     if (special.type !== "standard" || !isSpecial(special)) continue;
@@ -688,7 +688,7 @@ function manageHardShields(game: Game, field: Field, used: Set<Card>) {
   return { field: next, moved: !!transfer };
 }
 
-function chooseComputerAttack(game: Game, difficulty: Difficulty, roll: number) {
+function chooseComputerAttack(game: Game, difficulty: Difficulty, roll: number, requireProductive = difficulty === "Hard") {
   const options = game.computerField.flatMap((unit, attacker) => {
     if (!unit || !canAttackFrom(unit, attacker, game.playerField, game.player.length)) return [];
     const power = offense(game.computerField, attacker);
@@ -696,6 +696,8 @@ function chooseComputerAttack(game: Game, difficulty: Difficulty, roll: number) 
 
     return game.playerField.flatMap((defender, target) => {
       if (!defender || !canAttackTarget(unit, attacker, game.playerField, target)) return [];
+      // Hard only takes attacks whose effect can be established from public cards.
+      if (requireProductive && !defender.revealed) return [];
       // Score face-down targets using only the computer's own attack power.
       let score = 2 + Math.min(power, 20) / 20;
       if (defender.revealed) {
@@ -705,7 +707,20 @@ function chooseComputerAttack(game: Game, difficulty: Difficulty, roll: number) 
         if (defender.card.type === "joker") {
           score = unit.card.type === "standard" && unit.card.rank === "5" ? 8 : -2;
         } else if (defense.outer && !defense.outer.revealed) {
-          score = attack.power >= strength(defense.visibleCard) ? 3 : 0;
+          if (requireProductive) {
+            const owner = defense.shieldOwner?.unit;
+            if (!owner?.revealed || owner.card.type !== "standard") return [];
+            const protectedCard = owner.card;
+            const guaranteed = (Object.keys(suitNames) as Suit[]).every(suit => {
+              const hypothetical = { ...protectedCard, suit };
+              const hit = calculateAttack(game.computerField, attacker, hypothetical);
+              return !hit.immune && (hit.beatsTen || hit.power >= strength(hypothetical));
+            });
+            if (!guaranteed) return [];
+            score = 4;
+          } else {
+            score = attack.power >= strength(defense.visibleCard) ? 3 : 0;
+          }
         } else if (attack.immune) {
           score = -3;
         } else if (attack.beatsTen || attack.power >= strength(defense.card)) {
@@ -714,7 +729,7 @@ function chooseComputerAttack(game: Game, difficulty: Difficulty, roll: number) 
           score = 0;
         }
       }
-      return [{ attacker, target, power, tacticalScore: score }];
+      return requireProductive && score < 4 ? [] : [{ attacker, target, power, tacticalScore: score }];
     });
   });
 
@@ -925,8 +940,16 @@ function playerStepAfterDraw(game: Game): TurnStep {
   return canMoveUp(game.playerField) ? "move-up" : moveOutOrAttack(game);
 }
 
+function isCollectorCard(card: Card) {
+  return card.type === "standard" && card.rank === "3";
+}
+
 function isCollector(unit: Unit | null): unit is Unit {
-  return unit?.card.type === "standard" && unit.card.rank === "3";
+  return !!unit && isCollectorCard(unit.card);
+}
+
+function revealCollectors(field: Field): Field {
+  return field.map(unit => isCollector(unit) && !unit.revealed ? { ...unit, revealed: true } : unit);
 }
 
 function hasGarbageCollection(field: Field) {
@@ -1787,7 +1810,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           current.playerField.filter(isCollector).length < 3) return current;
       return {
         ...current,
-        playerField: current.playerField.map(unit => isCollector(unit) && !unit.revealed ? { ...unit, revealed: true } : unit),
+        playerField: revealCollectors(current.playerField),
         result: "Garbage Collection activated.",
       };
     });
@@ -2034,6 +2057,13 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
                 (card.type === "standard" && card.rank === "3" && card.suit === "clubs"))
                 .sort((a, b) => strength(a) - strength(b))
             : current.computer.filter(canDeploy).sort((a, b) => strength(b) - strength(a));
+          const planCollection = !tutorial && (difficulty === "Normal" || difficulty === "Hard") &&
+            (current.discardPile.length > 0 || current.turn > 2);
+          const neededCollectors = Math.max(0, 3 - field.filter(isCollector).length);
+          if (planCollection && neededCollectors && available.filter(isCollectorCard).length >= neededCollectors) {
+            const priority = available.filter(isCollectorCard).slice(0, neededCollectors);
+            available.splice(0, available.length, ...priority, ...available.filter(card => !priority.includes(card)));
+          }
           if (tutorial && current.turn === 6) {
             for (const required of [isTutorialEnemySeven, isTutorialEnemyFour]) {
               const index = available.findIndex(required);
@@ -2094,12 +2124,15 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
               });
             }
           }
-          const computerField = field;
+          const activateCollection = planCollection && current.discardPile.length > 0 &&
+            field.filter(isCollector).length >= 3 && !hasGarbageCollection(field);
+          const computerField = activateCollection ? revealCollectors(field) : field;
           const placed: Game = {
             ...current,
             computer: current.computer.filter(card => !used.has(card)),
             computerField,
             computerStacked: stackedForAttack,
+            result: activateCollection ? "Garbage Collection activated." : current.result,
             phase: "computer-attack",
             step: "attack",
             sound: stackedForAttack || stackCard ? { cue: "stack" }
@@ -2195,7 +2228,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           }, "player");
         }
         const attackDifficulty = current.computerStacked ? "Hard" : difficulty;
-        const { attack, hasProductiveAttack } = chooseComputerAttack(current, attackDifficulty, attackRoll);
+        const { attack, hasProductiveAttack } = chooseComputerAttack(current, attackDifficulty, attackRoll, difficulty === "Hard");
         const { attacker, target } = attack ?? { attacker: -1, target: -1 };
         const attackingUnit = current.computerField[attacker];
         if (target === -1 && attackingUnit && current.player.length) {
@@ -2216,9 +2249,9 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
         }
         const turn: Game = { ...current, phase: "computer", result: "", advantage: false, immunity: undefined };
         const special = !hasProductiveAttack && (!attack || difficulty !== "Easy")
-          ? chooseComputerSpecial(turn, Boolean(attack))
+          ? chooseComputerSpecial(turn, Boolean(attack), difficulty !== "Hard")
           : undefined;
-        if (difficulty === "Hard" && !hasProductiveAttack && !special && (attack?.tacticalScore ?? 0) <= 0) {
+        if (difficulty === "Hard" && !attack && !special) {
           const slot = chooseComputerRetreat(turn);
           const unit = turn.computerField[slot];
           if (unit) {
@@ -2230,6 +2263,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
               sound: { cue: "play" },
             }, "player");
           }
+          return drawForTurn({ ...turn, phase: "player", result: "The computer found no effective attack and ended its turn." }, "player");
         }
         const resolved = special
           ? resolveSpecial(turn, special.index, "computer", special.card)
