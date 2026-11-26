@@ -4,6 +4,7 @@ const faceRanks: Partial<Record<Rank, string>> = { A: "ace", J: "jack", Q: "quee
 
 const characters: Partial<Record<Rank, { sprite: string; className: string; size: number }>> = {
   "2": { sprite: "halfling-2", className: "card-ranger-overlay", size: 50 },
+  "3": { sprite: "rat-3", className: "card-ranger-overlay", size: 60 },
   "4": { sprite: "knight-4", className: "card-knight-overlay", size: 45 },
   "5": { sprite: "engineer-5", className: "card-engineer-overlay", size: 45 },
   "6": { sprite: "ranger-6", className: "card-ranger-overlay", size: 50 },
