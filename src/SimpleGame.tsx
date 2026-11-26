@@ -1071,10 +1071,20 @@ function CardDetails({ card, layers }: { card: Card | null | undefined; layers: 
   );
 }
 
-function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick, canPick, onPickEmpty, canDrag, onDrag, onDragEnd, onDrop, onDropEmpty, onInspect, inspected, onDoublePick, highlighted = false, highlightRanged = false, moveGuide, onTouchRearrange }: {
+function LegendaryLightning() {
+  return (
+    <svg className="legendary-lightning" viewBox="0 0 120 180" aria-hidden="true">
+      <path className="legendary-lightning-branches" d="M58 32 39 41 29 65 17 72 M52 65 72 55 86 58 99 44 M77 94 99 99 112 124 M62 116 45 104 31 107 18 96 M55 146 36 143 24 154 M60 163 80 151 101 153 M61 176 44 167 29 175 M61 176 82 169 92 177" />
+      <path className="legendary-lightning-core" d="M51 0 65 28 50 66 78 93 61 118 54 145 62 176" />
+    </svg>
+  );
+}
+
+function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick, canPick, onPickEmpty, canDrag, onDrag, onDragEnd, onDrop, onDropEmpty, onInspect, inspected, onDoublePick, highlighted = false, highlightRanged = false, moveGuide, onTouchRearrange, legendaryCards }: {
   onInspect?: (card: Card | null) => void;
   inspected?: Card | null;
   units: Field;
+  legendaryCards?: readonly Card[];
   label: string;
   rank: FieldRank;
   onPickEmpty?: (lane: number) => void;
@@ -1244,6 +1254,7 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
                       onDragOver={onDrop ? event => event.preventDefault() : undefined}
                       onDrop={onDrop ? event => { event.preventDefault(); onDrop(index, event.shiftKey); } : undefined}
                     >
+                      {legendaryCards?.includes(unit.card) && <LegendaryLightning />}
                       {pickable || onInspect ? (
                         <button
                           data-touch-rearrange={onTouchRearrange && canDrag?.(index) ? true : undefined}
@@ -1735,7 +1746,34 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const hasOpenLane = openLanes(game.playerField, "back").length > 0;
   const hasStackTarget = (card: Card) => hasHandStack(game.playerField, card);
   const canStackFromHand = !tutorialGuided && !tutorialOpening && !isComputer && !showingCombatEffect && !game.pendingAttack;
-  const unlockSound = useGameSound(game, soundEnabled && !paused, showingCombatEffect ? null : outcome);
+  const previousLegendaryField = useRef({ round: game.round, player: game.playerField, computer: game.computerField });
+  const [legendaryCards, setLegendaryCards] = useState<readonly Card[]>();
+  useEffect(() => {
+    if (paused) return;
+    const before = previousLegendaryField.current;
+    previousLegendaryField.current = { round: game.round, player: game.playerField, computer: game.computerField };
+    if (before.round !== game.round) {
+      setLegendaryCards(undefined);
+      return;
+    }
+    const previous = [...before.player, ...before.computer];
+    const current = [...game.playerField, ...game.computerField];
+    const revealed = current.flatMap(unit =>
+      unit?.revealed && unit.card.type === "standard" && unit.card.rank === "9" &&
+        previous.some(old => old?.card === unit.card && !old.revealed) ? [unit.card] : []);
+    const defeated = game.attackAnimation?.target;
+    if (defeated?.type === "standard" && defeated.rank === "9" &&
+        !current.some(unit => unit?.card === defeated) &&
+        previous.some(unit => unit?.card === defeated && !unit.revealed)) revealed.push(defeated);
+    if (revealed.length) setLegendaryCards(revealed);
+  }, [game.round, game.playerField, game.computerField, game.attackAnimation, paused]);
+  useEffect(() => {
+    if (!legendaryCards) return;
+    const timer = window.setTimeout(() => setLegendaryCards(undefined), 900);
+    return () => window.clearTimeout(timer);
+  }, [legendaryCards]);
+
+  const unlockSound = useGameSound(game, soundEnabled && !paused, showingCombatEffect ? null : outcome, legendaryCards);
   const draggedCard = useRef<DraggedCard | null>(null);
   const canDeployFromHand = canDeployThisPhase(game) && hasOpenLane;
   const canToggleHandStack = compactBoard && canDeployFromHand && canStackFromHand &&
@@ -2801,6 +2839,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     <BattlefieldRow
       key={rank}
       units={game.playerField}
+      legendaryCards={legendaryCards}
       highlighted={rank === "back" ? isMovingUp : isAttacking && !skipAttack}
       highlightRanged={rank === "back" && isAttacking && !skipAttack}
       rank={rank}
@@ -2994,6 +3033,9 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
               </>
             )}
             <div className="attack-cutaway-target">
+              {legendaryCards?.includes(game.attackAnimation.target) &&
+                !game.computerField.some(unit => unit?.card === game.attackAnimation?.target) &&
+                !game.playerField.some(unit => unit?.card === game.attackAnimation?.target) && <LegendaryLightning />}
               <div className={game.attackAnimation.shield ? undefined : "attack-cutaway-impact"}>
                 <CardFace card={game.attackAnimation.target} />
               </div>
@@ -3241,6 +3283,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             <BattlefieldRow
               key={rank}
               units={game.computerField}
+              legendaryCards={legendaryCards}
               rank={rank}
               label={rank === "front" ? "Computer front rank" : "Computer back rank"}
               opponent

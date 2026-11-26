@@ -162,8 +162,9 @@ function prepareRecording(cue: GameSound, buffer: AudioBuffer) {
   return { buffer, offset, level: Math.min(4, 0.95 / Math.max(playbackPeak, 0.01)) };
 }
 
-export function useGameSound(game: SoundState, enabled: boolean, outcome: "victory" | "defeat" | "draw" | null) {
+export function useGameSound(game: SoundState, enabled: boolean, outcome: "victory" | "defeat" | "draw" | null, legendaryReveal?: object) {
   const audio = useRef<{ context: AudioContext; noise: AudioBuffer; recordings: Map<GameSound, ReturnType<typeof prepareRecording>> } | null>(null);
+  const previousLegendaryReveal = useRef<object>();
   const activeSources = useRef(new Set<AudioScheduledSourceNode>());
   const stopEffects = useCallback(() => {
     for (const source of activeSources.current) {
@@ -212,6 +213,8 @@ export function useGameSound(game: SoundState, enabled: boolean, outcome: "victo
   }
 
   useEffect(() => {
+    const legendaryStrike = legendaryReveal && legendaryReveal !== previousLegendaryReveal.current;
+    previousLegendaryReveal.current = legendaryReveal;
     const old = previous.current;
     const outcomeChanged = previousOutcome.current !== outcome;
     previousOutcome.current = outcome;
@@ -247,6 +250,7 @@ export function useGameSound(game: SoundState, enabled: boolean, outcome: "victo
     const strikeFinished = Boolean(old.specialStrike || old.jokerExplosion || old.attackAnimation) && !combatEffect;
     const newTurn = old.turn !== game.turn || newRound || strikeFinished;
     if (newRound) play("shuffle");
+    if (legendaryStrike) play("lightning");
     if (game.sound && game.sound !== old.sound) {
       if (game.sound.lightning) play("lightning", .08);
       if (game.attackAnimation?.kind === "dragon") play("dragon-fire", 1.1);
@@ -266,7 +270,7 @@ export function useGameSound(game: SoundState, enabled: boolean, outcome: "victo
       play(game.phase.startsWith("computer") ? "enemy" : "player", newRound ? .2 : .18);
       if (game.drewCard && (old.drawPile !== game.drawPile || strikeFinished)) play("draw", .4);
     }
-  }, [game, enabled, outcome, canPlayAudio, trackSource]);
+  }, [game, enabled, outcome, legendaryReveal, canPlayAudio, trackSource]);
 
   useEffect(() => {
     if (!enabled) stopEffects();

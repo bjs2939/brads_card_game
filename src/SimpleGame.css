@@ -1699,3 +1699,34 @@
   filter: drop-shadow(0 0.3rem 0.45rem #0009);
   pointer-events: none;
 }
+
+.legendary-lightning {
+  position: absolute;
+  z-index: 7;
+  width: 145%;
+  height: 175%;
+  left: 50%;
+  bottom: 31%;
+  transform: translateX(-50%);
+  overflow: visible;
+  pointer-events: none;
+  filter: drop-shadow(0 0 5px #168cff) drop-shadow(0 0 11px #45b9ff);
+  animation: legendary-strike 900ms ease-out both;
+}
+.legendary-lightning path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.legendary-lightning-branches { stroke: #9cdeff; stroke-width: 2; }
+.legendary-lightning-core { stroke: #f1fcff; stroke-width: 5; }
+
+@keyframes legendary-strike {
+  0% { opacity: 0.85; clip-path: inset(0 0 80%); }
+  12% { opacity: 1; clip-path: inset(0 -20% -20%); }
+  35% { opacity: 0.88; }
+  100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .legendary-lightning { animation: none; opacity: 0.55; }
+}
