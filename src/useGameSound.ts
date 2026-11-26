@@ -250,7 +250,7 @@ export function useGameSound(game: SoundState, enabled: boolean, outcome: "victo
     const strikeFinished = Boolean(old.specialStrike || old.jokerExplosion || old.attackAnimation) && !combatEffect;
     const newTurn = old.turn !== game.turn || newRound || strikeFinished;
     if (newRound) play("shuffle");
-    if (legendaryStrike) play("lightning");
+    if (legendaryStrike) play("lightning", 0.16);
     if (game.sound && game.sound !== old.sound) {
       if (game.sound.lightning) play("lightning", .08);
       if (game.attackAnimation?.kind === "dragon") play("dragon-fire", 1.1);

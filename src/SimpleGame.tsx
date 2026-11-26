@@ -1072,10 +1072,20 @@ function CardDetails({ card, layers }: { card: Card | null | undefined; layers: 
 }
 
 function LegendaryLightning() {
+  const bolt = "M114 0 129 48 102 93 135 133 108 183 139 215 118 260 127 291 120 320";
   return (
-    <svg className="legendary-lightning" viewBox="0 0 120 180" aria-hidden="true">
-      <path className="legendary-lightning-branches" d="M58 32 39 41 29 65 17 72 M52 65 72 55 86 58 99 44 M77 94 99 99 112 124 M62 116 45 104 31 107 18 96 M55 146 36 143 24 154 M60 163 80 151 101 153 M61 176 44 167 29 175 M61 176 82 169 92 177" />
-      <path className="legendary-lightning-core" d="M51 0 65 28 50 66 78 93 61 118 54 145 62 176" />
+    <svg className="legendary-lightning" viewBox="0 0 240 400" aria-hidden="true">
+      <g className="legendary-lightning-bolt">
+        <path className="legendary-lightning-branches" d="M129 48 159 37 175 11 M102 93 77 73 51 79 25 61 M135 133 168 113 196 123 216 107 M108 183 74 168 51 188 16 190 M139 215 167 220 191 199 223 208 M118 260 89 239 59 247 M127 291 153 268 180 271 204 256" />
+        <path className="legendary-lightning-glow" d={bolt} />
+        <path className="legendary-lightning-rim" d={bolt} />
+        <path className="legendary-lightning-core" d={bolt} />
+      </g>
+      <g className="legendary-lightning-impact">
+        <path d="M120 320 92 306 62 309 M120 320 105 288 83 272 M120 320 146 296 174 290 M120 320 157 322 190 312 M120 320 139 340 174 348 M120 320 91 338 58 344" />
+        <circle cx="120" cy="320" r="12" />
+      </g>
+      <ellipse className="legendary-lightning-wave" cx="120" cy="320" rx="72" ry="23" />
     </svg>
   );
 }
@@ -1769,7 +1779,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   }, [game.round, game.playerField, game.computerField, game.attackAnimation, paused]);
   useEffect(() => {
     if (!legendaryCards) return;
-    const timer = window.setTimeout(() => setLegendaryCards(undefined), 900);
+    const timer = window.setTimeout(() => setLegendaryCards(undefined), 1600);
     return () => window.clearTimeout(timer);
   }, [legendaryCards]);
 
