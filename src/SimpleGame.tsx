@@ -2988,6 +2988,11 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           <p><strong>Tip</strong> {matchTips[(Math.ceil(game.turn / 2) - 1) % matchTips.length]}</p>
         </aside>
       )}
+      {tutorial && !isComputer && !paused && !showingCombatEffect && !warningActive && (
+        <aside className="tutorial-turn-prompt" role="status" aria-atomic="true">
+          <p>{turnMessage}</p>
+        </aside>
+      )}
       <h1>{simpleVersionTitle}</h1>
       <div>{modeLabel}</div>
       <div className="turn-steps" aria-label="Turn phases">
@@ -3218,10 +3223,12 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           </div>
         </section>
       </div>
-      <div role="status" className="simple-game-status">
-        <p key={turnMessage} className="simple-game-pulse">{turnMessage}</p>
-        {game.result && <p key={game.result} className="simple-game-pulse">{game.advantage && !game.immunity && `Weapon advantage +${game.advantageBonus ?? 1}. `}{game.result}</p>}
-      </div>
+      {(!tutorial || game.result) && (
+        <div role="status" className="simple-game-status">
+          {!tutorial && <p key={turnMessage} className="simple-game-pulse">{turnMessage}</p>}
+          {game.result && <p key={game.result} className="simple-game-pulse">{game.advantage && !game.immunity && `Weapon advantage +${game.advantageBonus ?? 1}. `}{game.result}</p>}
+        </div>
+      )}
 
       {pendingPower && !choosingStackTargets && (
         <section className="stack-attack-confirmation" aria-labelledby="stack-power-title">

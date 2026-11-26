@@ -800,6 +800,27 @@
   clip-path: inset(50%);
 }
 
+.tutorial-turn-prompt {
+  position: fixed;
+  z-index: 9;
+  top: max(0.75rem, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(34rem, calc(100% - 1.5rem));
+  box-sizing: border-box;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid #d6ad69;
+  border-radius: 0.65rem;
+  background: #102c35;
+  color: #fff1d0;
+  box-shadow: 0 0.45rem 1.3rem #06101fb3;
+  font: 700 clamp(0.8rem, 2.5vw, 0.95rem)/1.35 system-ui, sans-serif;
+  pointer-events: none;
+}
+
+.tutorial-turn-prompt p { margin: 0; }
+
 .opponent-turn-tip {
   position: fixed;
   z-index: 9;
