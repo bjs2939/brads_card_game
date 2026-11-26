@@ -100,7 +100,7 @@ export default function HomePage() {
         <div className="game-mode-options">
           {chooseDifficulty ? difficulties.map(level => (
             <div className="difficulty-row" key={level}>
-              <button className={level === "Normal" ? "game-home-primary" : undefined} onClick={() => launchMatch(level)}>{level}</button>
+              <button onClick={() => launchMatch(level)}>{level}</button>
               <div className="difficulty-info">
                 <button type="button" aria-label={`About ${level} difficulty`} aria-describedby={`difficulty-${level}`}
                   onClick={event => event.currentTarget.focus()}>i</button>
@@ -111,7 +111,7 @@ export default function HomePage() {
             <>
               <button disabled>Campaign <small>Coming soon</small></button>
               <button type="button" onClick={openTutorial}>Tutorial</button>
-              <button className="game-home-primary" onClick={() => setChooseDifficulty(true)}>VS Computer</button>
+              <button onClick={() => setChooseDifficulty(true)}>VS Computer</button>
               <button disabled>Online Matchmaking <small>Coming soon</small></button>
               <button disabled>VS Friend <small>Coming soon</small></button>
             </>

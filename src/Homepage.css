@@ -77,6 +77,13 @@
 .game-mode-picker h2 { margin: 0 0 1rem; font-size: clamp(1.4rem, 5vw, 2rem); }
 .game-mode-options { display: grid; gap: 0.55rem; }
 .game-mode-options button { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; text-align: left; }
+.game-mode-options button:not(:disabled):hover,
+.game-mode-options:not(:has(button:not(:disabled):hover)) button:focus-visible {
+  color: #2a1c10;
+  background: #eac47c;
+  border-color: #ffe2a8;
+  filter: none;
+}
 .game-mode-options small { font-size: 0.72em; font-weight: 500; }
 .game-home .game-mode-back { margin-top: 1rem; background: transparent; }
 
