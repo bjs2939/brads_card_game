@@ -83,7 +83,7 @@ type Game = ReturnType<typeof dealSimpleGame> & {
   drawnCard?: Card;
   deckWarning?: 0 | 1 | 2 | 3 | 4 | 5 | 10;
   spyFlash?: Card;
-  attackAnimation?: { attacker: Card; target: Card; side: Side; kind: "ranger" | "dragon" | "card" };
+  attackAnimation?: { attacker: Card; target: Card; side: Side; kind: "ranger" | "dragon" | "card"; shield?: { card?: Card; builtIn?: true } };
   jokerExplosion?: { turn: number; survived: boolean; attacker: Card };
   selected: number | null;
   selectedShield: Card | null;
@@ -770,12 +770,12 @@ function findComputerStack(game: Game, field: Field) {
   return bestField;
 }
 
-function makeAttackAnimation(attacker: Unit, target: Card, side: Side, jokerBlast = false): Game["attackAnimation"] {
+function makeAttackAnimation(attacker: Unit, target: Card, side: Side, jokerBlast = false, shield?: NonNullable<Game["attackAnimation"]>["shield"]): Game["attackAnimation"] {
   const card = attacker.card;
   const kind = card.type === "standard" && card.rank === "6" ? "ranger"
     : card.type === "standard" && card.rank === "10" ? "dragon" : "card";
   if (kind === "card" && jokerBlast) return;
-  return { attacker: card, target, side, kind };
+  return { attacker: card, target, side, kind, shield };
 }
 
 function stackVictimChoices(attackers: Field, attacker: number, defenders: Field, target: number) {
@@ -829,6 +829,10 @@ function resolveAttack(game: Game, side: Side, attackerIndex: number, targetInde
       defendedLane.find(({ unit }) => hasFourShield(unit))
     : undefined;
   const fourShieldHit = !!builtInOwner;
+  const shieldAnimation = blast ? undefined
+    : outer ? { card: shieldHit || survivingShields[shieldIndex]?.revealed ? outer.card : undefined }
+    : builtInOwner ? { card: builtInOwner.unit.card, builtIn: true as const } : undefined;
+  const defendedUnit = !blast ? shieldOwner?.unit ?? builtInOwner?.unit ?? defender : defender;
   const defeated = blast || (attackerWins && !outer && !fourShieldHit);
   const discarded: Card[] = [];
   if (blast && !survivesBlast) {
@@ -863,7 +867,7 @@ function resolveAttack(game: Game, side: Side, attackerIndex: number, targetInde
     discardPile: discarded.length ? [...game.discardPile, ...discarded] : game.discardPile,
     selected: null,
     pendingAttack: undefined,
-    attackAnimation: makeAttackAnimation(attacker, !blast && chosenShield !== undefined && outer ? outer.card : defender.card, side, blast),
+    attackAnimation: makeAttackAnimation(attacker, defendedUnit.card, side, blast, shieldAnimation),
     jokerExplosion: blast ? { turn: game.turn, survived: survivesBlast, attacker: attacker.card } : undefined,
     phase: nextSide,
     advantage: attack.bonus > 0,
@@ -2881,7 +2885,28 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
                 <span className={game.attackAnimation.kind === "dragon" ? "dragon-fire" : "ranger-arrow"} aria-hidden="true" />
               </>
             )}
-            <div className="attack-cutaway-target"><CardFace card={game.attackAnimation.target} /></div>
+            <div className="attack-cutaway-target">
+              <div className={game.attackAnimation.shield ? undefined : "attack-cutaway-impact"}>
+                <CardFace card={game.attackAnimation.target} />
+              </div>
+              {game.attackAnimation.shield && (
+                <div className="attack-cutaway-shield attack-cutaway-impact">
+                  {!game.attackAnimation.shield.builtIn && (
+                    <div className="attack-cutaway-shield-art">
+                      <CardFace card={game.attackAnimation.shield.card} faceDown={!game.attackAnimation.shield.card} />
+                    </div>
+                  )}
+                  <span className="attack-cutaway-shield-label">
+                    {game.attackAnimation.shield.builtIn ? "Built-in shield" : "Shield"}
+                    {game.attackAnimation.shield.card?.type === "standard" && (
+                      <b data-suit={game.attackAnimation.shield.card.suit}>
+                        {game.attackAnimation.shield.card.rank}{suitSymbols[game.attackAnimation.shield.card.suit]}
+                      </b>
+                    )}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         </aside>
       )}

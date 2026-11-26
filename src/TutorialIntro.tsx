@@ -137,6 +137,7 @@ export const tutorialLessons = {
   ],
   "press-the-advantage": [
     { speaker: "locke", text: "Now their 4 tried attacking our 8. I’m beginning to think the enemy commander owes someone community service too." },
+    { speaker: "garrison", text: "A Jack or Queen shield borrows the strength of the card it protects. Put one on an 8 and the shield has 8 power. It still uses its own suit, so their 4 never had the strength to break it." },
     { speaker: "garrison", text: "Our line is strong enough for now. Keep the rest of your troops in hand and chip away with the cards already on the field." },
     { speaker: "locke", text: "Then let’s try our 8 of Clubs against that pesky 4 of Spades. Go on, select the 8 and aim at the 4." },
   ],

@@ -1157,8 +1157,48 @@
 }
 .attack-cutaway-target {
   width: var(--target-size);
+  position: relative;
+}
+.attack-cutaway-impact {
   animation: ranger-card-impact 400ms 1440ms both;
 }
+.attack-cutaway-shield {
+  position: absolute;
+  inset: 25% 15% auto -18%;
+  aspect-ratio: 7 / 5;
+  display: grid;
+  place-items: center;
+  border: 2px solid #f0c778;
+  border-radius: 0.45rem;
+  background: #293b50;
+  box-shadow: 0 2px 10px #000a;
+}
+.attack-cutaway-shield-art {
+  position: absolute;
+  width: 71.43%;
+  transform: rotate(90deg);
+}
+.attack-cutaway-shield-label {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.25rem;
+  padding: 0.15rem 0.25rem;
+  border-radius: 0.25rem;
+  background: #172c41;
+  color: #fff0c7;
+  font: 700 clamp(0.56rem, 2vw, 0.75rem)/1.2 system-ui, sans-serif;
+}
+.attack-cutaway-shield-label b {
+  padding: 0.1rem 0.2rem;
+  border-radius: 0.2rem;
+  background: #fff8e9;
+  color: #172c41;
+}
+.attack-cutaway-shield-label b[data-suit="hearts"],
+.attack-cutaway-shield-label b[data-suit="diamonds"] { color: #a51c37; }
 .ranger-arrow {
   position: absolute;
   top: calc(50% - var(--ranger-size) * 0.06 - 0.225rem);
@@ -1176,7 +1216,7 @@
   25% { transform: translateX(0.3rem) rotate(4deg); filter: brightness(1.4); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ranger-arrow, .attack-cutaway-target { animation: none; }
+  .ranger-arrow, .attack-cutaway-impact { animation: none; }
   .ranger-arrow { display: none; }
 }
 
@@ -1246,7 +1286,7 @@
   clip-path: polygon(0 47%, 14% 34%, 34% 39%, 50% 16%, 67% 27%, 78% 0, 87% 20%, 100% 10%, 92% 38%, 100% 54%, 93% 69%, 98% 100%, 75% 79%, 65% 88%, 47% 65%, 27% 69%, 13% 57%);
   animation: dragon-fire-breath 630ms 1100ms ease-out both;
 }
-.attack-cutaway--dragon .attack-cutaway-target { animation-name: dragon-fire-impact; }
+.attack-cutaway--dragon .attack-cutaway-impact { animation-name: dragon-fire-impact; }
 @keyframes dragon-fire-breath {
   0% { transform: scale(0.05, 0.38); opacity: 0; }
   15% { opacity: 1; }
@@ -1390,7 +1430,7 @@
   z-index: 1;
   animation: card-attack-lunge 1100ms both;
 }
-.attack-cutaway--card .attack-cutaway-target {
+.attack-cutaway--card .attack-cutaway-impact {
   animation: ranger-card-impact 360ms 520ms both;
 }
 .attack-card-contact {
@@ -1416,7 +1456,7 @@
   100% { opacity: 0; transform: scale(1.35); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .attack-cutaway-attacker, .attack-card-contact { animation: none; }
+  .attack-cutaway-attacker, .attack-card-contact, .attack-cutaway--card .attack-cutaway-impact { animation: none; }
   .attack-card-contact { display: none; }
 }
 
