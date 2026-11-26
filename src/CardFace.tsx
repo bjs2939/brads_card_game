@@ -14,6 +14,7 @@ const characters: Partial<Record<Rank, { sprite: string; className: string; size
 };
 
 const legendarySprites: Partial<Record<Suit, string>> = {
+  hearts: "flame-swordsman-9-hearts",
   clubs: "spear-warrior-9-clubs",
   diamonds: "wizard-9-diamonds",
 };

@@ -3164,7 +3164,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
         </label>
         <label>Jokers
           <select value={jokerCount} disabled={coinFlipping} onChange={event => setJokerCount(Number(event.target.value))}>
-            {[0, 1, 2, 3, 4].map(count => <option key={count} value={count}>{count}</option>)}
+            {[0, 1, 2, 3, 4].map(count => <option key={count} value={count}>{count === 4 ? "4 (Recommended)" : count}</option>)}
           </select>
         </label>
         {firstTurn === "flip" && (
