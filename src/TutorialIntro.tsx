@@ -106,8 +106,19 @@ export const tutorialLessons = {
     { speaker: "locke", text: "If we take it down, lovely. If we don’t, we still reveal what it is. I call that a win with unusually flexible bookkeeping." },
   ],
   "slay-dragon": [
-    { speaker: "garrison", text: "The dragon took our 4. Sacrifices are made in battle. Move your shielded 2 of Hearts to the front rank." },
-    { speaker: "locke", text: "Then select the 2 again and attack the 10 of Diamonds. Small soldier, large dragon. Terrible odds, if you’re the dragon." },
+    { speaker: "locke", text: "This is just our day, isn’t it? An 8 of Hearts. And now the dragon’s taken our 4." },
+    { speaker: "garrison", text: "Hold on, Locke. This is how battles go. We can still take out the 10. Move up the shielded 2 of Hearts, directly in front of the 6 to protect our ranger." },
+  ],
+  "dragon-attack": [
+    { speaker: "locke", text: "The ranger has cover. Now select the 2, attack the 10 of Diamonds, and watch a halfling take down a dragon. I hope someone is writing this down." },
+  ],
+  "reserve-move-up": [
+    { speaker: "garrison", text: "The dragon is down. Move your 8 of Clubs to the front rank. It’s time to deal with that 8 of Hearts the ranger uncovered." },
+    { speaker: "locke", text: "I see the 10 of Clubs in your hand. Keep the dragon in reserve for now. We still don’t know what they’re holding or how they’ll use it. Even I don’t show my best trick first." },
+  ],
+  "reserve-attack": [
+    { speaker: "garrison", text: "Select the 8 of Clubs, then attack the revealed 8 of Hearts. Clubs beat Hearts, so your 8 gets +1." },
+    { speaker: "locke", text: "Nine beats eight. Where was this arithmetic when I was doing community service paperwork?" },
   ],
 } satisfies Record<string, readonly DialogueLine[]>;
 
