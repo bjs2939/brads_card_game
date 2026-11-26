@@ -96,7 +96,14 @@ export const tutorialLessons = {
   ],
   "halfling-shield": [
     { speaker: "locke", text: "Select the Jack of Spades from your hand, then select your deployed 2 of Hearts. The Jack becomes a shield. Let’s keep our dragon slayer in one piece until it gets there." },
-    { speaker: "garrison", text: "Once the shield is attached, end your turn. Try to look as though that was the plan all along." },
+    { speaker: "garrison", text: "Once the shield is attached, hold your position. We’re still making preparations." },
+  ],
+  "deploy-reserve": [
+    { speaker: "locke", text: "That 4 won’t hold much longer, and I’m not betting the castle on one halfling. Deploy your 8 of Clubs to the back rank. We’ll want a sturdier soldier ready to cover the ranger." },
+  ],
+  "ranger-recon": [
+    { speaker: "garrison", text: "Now select the 6 of Hearts and attack the unshielded enemy on the right of their front rank. The ranger can reach it from the back rank." },
+    { speaker: "locke", text: "If we take it down, lovely. If we don’t, we still reveal what it is. I call that a win with unusually flexible bookkeeping." },
   ],
   "slay-dragon": [
     { speaker: "garrison", text: "The dragon took our 4. Sacrifices are made in battle. Move your shielded 2 of Hearts to the front rank." },
@@ -171,6 +178,11 @@ function TutorialDialogue({ lines, audio, actionLabel, onDone, onExit }: {
   return (
       <section className="tutorial-overlay" role={onExit ? "dialog" : undefined} aria-modal={onExit ? true : undefined} aria-labelledby={onExit ? "tutorial-title" : undefined}
         onKeyDown={event => {
+          if (event.key === " ") {
+            event.preventDefault();
+            if (!event.repeat) next();
+            return;
+          }
           if (event.key === "ArrowLeft") { event.preventDefault(); previous(); }
           if (event.key === "ArrowRight" && (!last || typing)) { event.preventDefault(); next(); }
         }}>

@@ -210,6 +210,10 @@ function isTutorialJack(card: Card) {
   return card.type === "standard" && card.rank === "J" && card.suit === "spades";
 }
 
+function isTutorialReserve(card: Card) {
+  return card.type === "standard" && card.rank === "8" && card.suit === "clubs";
+}
+
 function isTutorialDragon(card: Card) {
   return card.type === "standard" && card.rank === "10" && card.suit === "diamonds";
 }
@@ -1258,11 +1262,18 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const halfling = tutorialDeployHalfling || tutorialSlayDragon
     ? game.playerField.find(unit => unit && isTutorialTwo(unit.card)) : null;
   const halflingShielded = !!halfling?.shields?.some(layer => isTutorialJack(layer.card));
+  const reserveDeployed = tutorialDeployHalfling && game.playerField.some(unit => unit && isTutorialReserve(unit.card));
+  const rangerTarget = reserveDeployed
+    ? game.computerField.findLastIndex((unit, index) =>
+        unit && fieldRank(unit, index) === "front" && !isTutorialDragon(unit.card) && !unit.shields?.length)
+    : -1;
   const tutorialGuided = tutorialDuel || tutorialRevenge || tutorialDeployHalfling || tutorialSlayDragon;
   const availableLesson = tutorial && game.turn === 2 && game.phase === "computer" ? "enemy-opening"
     : tutorial && game.phase === "player" && !game.attackAnimation && game.step !== "draw"
       ? tutorialDeployHalfling && !seenLessons.has("free-shield") ? "free-shield"
         : tutorialDeployHalfling && halfling && !seenLessons.has("halfling-shield") ? "halfling-shield"
+        : halflingShielded && tutorialDeployHalfling && !seenLessons.has("deploy-reserve") ? "deploy-reserve"
+        : reserveDeployed && !game.pendingAttack && !seenLessons.has("ranger-recon") ? "ranger-recon"
         : tutorialSlayDragon ? "slay-dragon"
         : tutorialRevenge && !seenLessons.has("counterattack") ? "counterattack"
         : revengeReady && !seenLessons.has("triangle") ? "triangle"
@@ -1502,7 +1513,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const canToggleHandStack = compactBoard && canDeployFromHand && canStackFromHand &&
     game.player.some(card => hasHandStack(game.playerField, card));
   const choosingHandStack = canToggleHandStack && stackFromHand;
-  const canEndTurn = (!tutorialGuided || (tutorialDeployHalfling && halflingShielded)) && !tutorialRank && !isComputer && game.step !== "draw" && !game.pendingAttack && !warningActive && !showingCombatEffect;
+  const canEndTurn = !tutorialGuided && !tutorialRank && !isComputer && game.step !== "draw" && !game.pendingAttack && !warningActive && !showingCombatEffect;
   const pendingTarget = game.pendingAttack && game.computerField[game.pendingAttack.target];
   const pendingPower = pendingTarget && game.pendingAttack?.isStack
     ? calculateAttack(game.playerField, game.pendingAttack.attacker,
@@ -1520,7 +1531,8 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const skipAttack = canEndTurn && !showingCombatEffect && hasNoAttackOptions(game);
 
   function canPickOwnUnit(unit: Unit, index: number) {
-    if (tutorialDeployHalfling) return !!game.selectedShield && isTutorialTwo(unit.card);
+    if (tutorialDeployHalfling) return reserveDeployed
+      ? isTutorialSix(unit.card) : !!game.selectedShield && isTutorialTwo(unit.card);
     if (tutorialSlayDragon) return isTutorialTwo(unit.card);
     if (tutorialRevenge) return revengeReady ? isTutorialSix(unit.card)
       : unit.card.type === "standard" && unit.card.rank === "4" && fieldRank(unit, index) === "front";
@@ -1903,7 +1915,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       if (!unit || current.phase !== "player" || current.pendingAttack || current.specialStrike) return current;
 
       if (tutorialSlayDragon && !isTutorialTwo(unit.card)) return current;
-      if (tutorialDeployHalfling && (!current.selectedShield || !isTutorialTwo(unit.card))) return current;
+      if (tutorialDeployHalfling && !canPickOwnUnit(unit, index)) return current;
       if (tutorialRevenge) {
         if (!canPickOwnUnit(unit, index)) return current;
         return { ...current, selected: current.selected === index ? null : index };
@@ -2077,7 +2089,8 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
 
       if (tutorialRevenge && (!revengeReady || !isTutorialSeven(defender.card) ||
           current.selected !== tutorialSixIndex)) return current;
-      if (tutorialDeployHalfling) return current;
+      if (tutorialDeployHalfling && (index !== rangerTarget || current.selected === null ||
+          !current.playerField[current.selected] || !isTutorialSix(current.playerField[current.selected]!.card))) return current;
       if (tutorialSlayDragon) {
         const source = current.selected === null ? null : current.playerField[current.selected];
         if (!source || !isTutorialTwo(source.card) || !isTutorialDragon(defender.card) ||
@@ -2192,7 +2205,9 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     if (isComputer) return `Enemy phase · ${turnSteps[game.step]}`;
     if (tutorialDeployHalfling && game.step !== "draw") return !halfling
       ? "Garrison: Deploy the 2 of Hearts."
-      : halflingShielded ? "Garrison: The halfling has a shield. End your turn."
+      : reserveDeployed ? aimingAttack ? "Locke: Attack the unshielded enemy on the right."
+          : "Garrison: Select the 6 of Hearts to scout the enemy front rank."
+        : halflingShielded ? "Locke: Deploy the 8 of Clubs to the back rank."
         : game.selectedShield ? "Locke: Select the deployed 2 to attach the shield."
           : "Locke: Select your Jack of Spades to shield the 2.";
     if (tutorialSlayDragon && game.step !== "draw") return aimingAttack
@@ -2299,8 +2314,11 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   }
 
   function canUseHandCard(card: Card) {
-    if (tutorialDeployHalfling) return canDeployFromHand && !halfling && isTutorialTwo(card) ||
-      game.step !== "draw" && !!halfling && !halflingShielded && isTutorialJack(card);
+    if (tutorialDeployHalfling) {
+      if (!halfling) return canDeployFromHand && isTutorialTwo(card);
+      if (!halflingShielded) return game.step !== "draw" && isTutorialJack(card);
+      return canDeployFromHand && !reserveDeployed && isTutorialReserve(card);
+    }
     if (tutorialGuided) return false;
     if (tutorialOpening) return canDeployFromHand && card === tutorialDeployment;
     if (isShield(card)) return canChooseShield || (isJack(card) && canSpy) || (isQueen(card) && canDoubleAttack);
@@ -2631,7 +2649,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
               inspected={inspected}
               canPick={(unit, index) => (!tutorialDuel || index === tutorialTarget) &&
                 (!tutorialRevenge || (revengeReady && isTutorialSeven(unit.card))) &&
-                (!tutorialSlayDragon || isTutorialDragon(unit.card)) && !tutorialDeployHalfling && (!!game.selectedSpecial || (
+                (!tutorialSlayDragon || isTutorialDragon(unit.card)) && (!tutorialDeployHalfling || index === rangerTarget) && (!!game.selectedSpecial || (
                 !!selectedUnit && selected !== null && canAttackTarget(selectedUnit, selected, game.computerField, index)
               ))}
               onPick={!isComputer && !showingCombatEffect && !game.pendingAttack && !game.movingStack &&
