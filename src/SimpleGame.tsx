@@ -1497,6 +1497,12 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const [firstTurn, setFirstTurn] = useState<Side | "flip">("flip");
   const [jokerCount, setJokerCount] = useState(4);
   const [flipWinner, setFlipWinner] = useState<Side | null>(null);
+  const [coinFlipping, setCoinFlipping] = useState(false);
+  useEffect(() => {
+    if (!coinFlipping) return;
+    const timer = window.setTimeout(() => setCoinFlipping(false), 1100);
+    return () => window.clearTimeout(timer);
+  }, [coinFlipping]);
   const setupDialog = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -1506,9 +1512,11 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   }, [setupPending]);
 
   function startConfiguredMatch() {
+    if (coinFlipping) return;
     const starter = firstTurn === "flip" ? flipWinner : firstTurn;
     if (!starter) {
       setFlipWinner(Math.random() < 0.5 ? "player" : "computer");
+      setCoinFlipping(!window.matchMedia("(prefers-reduced-motion: reduce)").matches);
       return;
     }
     setGame(startGame(false, starter, jokerCount));
@@ -3145,7 +3153,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
         onCancel={event => { event.preventDefault(); onBack(); }}>
         <h2 id="match-setup-title">Game Setup</h2>
         <label>First turn
-          <select value={firstTurn} onChange={event => {
+          <select value={firstTurn} disabled={coinFlipping} onChange={event => {
             setFirstTurn(event.target.value as Side | "flip");
             setFlipWinner(null);
           }}>
@@ -3155,15 +3163,29 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           </select>
         </label>
         <label>Jokers
-          <select value={jokerCount} onChange={event => setJokerCount(Number(event.target.value))}>
+          <select value={jokerCount} disabled={coinFlipping} onChange={event => setJokerCount(Number(event.target.value))}>
             {[0, 1, 2, 3, 4].map(count => <option key={count} value={count}>{count}</option>)}
           </select>
         </label>
-        {flipWinner && firstTurn === "flip" && (
-          <p className="match-setup-result" role="status">{flipWinner === "player" ? "Heads · You go first." : "Tails · Computer goes first."}</p>
+        {firstTurn === "flip" && (
+          <div className="match-coin-area">
+            <div className="match-coin-toss" data-flipping={coinFlipping || undefined} aria-hidden="true">
+              <div className="match-coin" data-tails={flipWinner === "computer" || undefined}>
+                <span className="match-coin-face">&#9819;</span>
+                <span className="match-coin-face match-coin-tails">&#9820;</span>
+              </div>
+            </div>
+            <p className="match-setup-result" role="status">
+              {coinFlipping ? "Flipping coin..."
+                : flipWinner === "player" ? "Heads · You go first."
+                : flipWinner === "computer" ? "Tails · Computer goes first." : ""}
+            </p>
+          </div>
         )}
         <div className="game-mode-options">
-          <button onClick={startConfiguredMatch}>{firstTurn === "flip" && !flipWinner ? "Flip Coin" : "Start Match"}</button>
+          <button onClick={startConfiguredMatch} disabled={coinFlipping}>
+            {coinFlipping ? "Flipping..." : firstTurn === "flip" && !flipWinner ? "Flip Coin" : "Start Match"}
+          </button>
           <button onClick={onBack}>Back to Home</button>
         </div>
       </dialog>
