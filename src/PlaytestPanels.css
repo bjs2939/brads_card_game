@@ -31,6 +31,24 @@
   left: 0.6rem;
 }
 
+.feedback-confirmation {
+  position: fixed;
+  z-index: 10;
+  left: 0.6rem;
+  bottom: calc(3.6rem + env(safe-area-inset-bottom));
+  pointer-events: none;
+}
+
+.feedback-confirmation span {
+  display: block;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid #9d8054;
+  border-radius: 0.4rem;
+  background: #252c31;
+  color: #ffe5b1;
+  font: 700 0.82rem/1.2 system-ui, sans-serif;
+}
+
 .playtest-dialog {
   max-height: calc(100dvh - 2rem);
   overflow-y: auto;

@@ -1,6 +1,15 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./PlaytestPanels.css";
 import { createFeedbackIssue, feedbackCategories, gameVersion, loadHistory } from "./playtest";
+
+const feedbackErrors: Partial<Record<number, string>> = {
+  400: "The server rejected a field. Edit the report and check your return email.",
+  403: "The feedback server rejected this page's connection.",
+  409: "A previous submission is still pending. Keep this draft open to retry.",
+  429: "Too many reports were sent recently. Try again later.",
+  502: "GitHub could not accept the report. Try again later.",
+  503: "The feedback service is temporarily unavailable.",
+};
 
 export function Feedback({ context, floating = false, onOpenChange }: {
   context: string;
@@ -19,12 +28,22 @@ export function Feedback({ context, floating = false, onOpenChange }: {
   const feedbackEndpoint = import.meta.env.VITE_FEEDBACK_ENDPOINT;
   const [preview, setPreview] = useState<ReturnType<typeof createFeedbackIssue>>();
   const [status, setStatus] = useState("");
+  const [sentIssue, setSentIssue] = useState<number>();
+
+  useEffect(() => {
+    if (sentIssue === undefined) return;
+    const timeout = window.setTimeout(() => setSentIssue(undefined), 6000);
+    return () => window.clearTimeout(timeout);
+  }, [sentIssue]);
 
   return <>
     <button type="button" className={floating ? "playtest-button feedback-floating" : "playtest-button"}
       aria-haspopup="dialog" onClick={() => { dialog.current?.showModal(); onOpenChange?.(true); }}>
       <span aria-hidden="true">&#9993;</span> Feedback
     </button>
+    <div className="feedback-confirmation" role="status">
+      {sentIssue !== undefined && <span>Feedback sent. Reference #{sentIssue}.</span>}
+    </div>
     <dialog ref={dialog} className="game-mode-picker playtest-dialog" aria-labelledby="feedback-title"
       onClose={() => onOpenChange?.(false)}>
       <h2 id="feedback-title">Help improve the game</h2>
@@ -43,17 +62,28 @@ export function Feedback({ context, floating = false, onOpenChange }: {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ id: requestId.current, name, email, category, subject, description, context: diagnostics ? context : undefined }),
               });
+              if (!response.ok) {
+                setStatus(`${feedbackErrors[response.status] ?? "The feedback server returned an error."} (HTTP ${response.status}) Your draft is still open.`);
+                if (import.meta.env.DEV) console.warn("Feedback failed", { status: response.status });
+                return;
+              }
               const result = await response.json();
-              if (!response.ok || !Number.isSafeInteger(result.issue)) throw new Error("Submission failed");
+              if (!Number.isSafeInteger(result.issue)) {
+                setStatus("The server did not confirm an issue number. Your draft is still open.");
+                return;
+              }
               setPreview(undefined);
               setName("");
               setEmail("");
               setSubject("");
               setDescription("");
               setDiagnostics(false);
-              setStatus(`Feedback sent. Reference #${result.issue}.`);
+              setStatus("");
+              dialog.current?.close();
+              setSentIssue(result.issue);
             } catch {
-              setStatus("Feedback could not be sent. Your report is still here. Please try again.");
+              setStatus("Could not reach the feedback service or read its response. Your draft is still open.");
+              if (import.meta.env.DEV) console.warn("Feedback request failed before an issue number was confirmed.");
             } finally {
               setSending(false);
             }
@@ -64,6 +94,10 @@ export function Feedback({ context, floating = false, onOpenChange }: {
       </> : <form onSubmit={event => {
         event.preventDefault();
         if (!name.trim() || !subject.trim() || !description.trim()) { setStatus("Complete all required fields."); return; }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+          setStatus("Enter a full return email address, such as name@example.com.");
+          return;
+        }
         setStatus("");
         requestId.current = crypto.randomUUID();
         setPreview(createFeedbackIssue(category, subject, description, diagnostics ? context : undefined, name.trim()));
