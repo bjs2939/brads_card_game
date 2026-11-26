@@ -65,9 +65,17 @@ export const tutorialLessons = {
     { speaker: "garrison", text: "All three soldiers are deployed. Select them one at a time and move them up to the front rank. All three, Locke." },
     { speaker: "locke", text: "Hold on! Let’s be sneaky. Your 6 of Hearts can attack the enemy front rank from behind our lines. Move up the 5 and the 4, and leave the 6 in the back." },
   ],
+  "cover": [
+    { speaker: "garrison", text: "The 4 and 5 are in place. Rearranging cards within the same rank is a free action. You can do it without ending your turn." },
+    { speaker: "locke", text: "Put the 6 behind the 4 or the 5 for cover. Drag it into an empty slot in the back rank, or select the 6 and then select the slot." },
+  ],
   "attack": [
-    { speaker: "locke", text: "Time to attack. Select a front-rank number card or your 6 of Hearts in the back rank, then choose an enemy target. Attacking usually ends your turn." },
-    { speaker: "garrison", text: "Check the Weapon Triangle before you strike. In Easy mode, you’ll get a warning if a face-up target is immune." },
+    { speaker: "garrison", text: "Their left card has a shield. A shield takes the hit before the soldier behind it. Leave that one alone and aim at the unshielded card in the middle of their back rank." },
+    { speaker: "locke", text: "Select your 5 of Spades in the front rank, then hit that middle card. I’m sure charging at something we can’t see will go brilliantly." },
+  ],
+  "counterattack": [
+    { speaker: "locke", text: "Well. That was a 7 of Spades. Our 5 wasn’t strong enough, and their 7 took it out on the counterattack." },
+    { speaker: "garrison", text: "That’s a normal risk. A face-down card can hide a stronger soldier. The first attack revealed it, so now you can make your next move with more information." },
   ],
 } satisfies Record<string, readonly DialogueLine[]>;
 
