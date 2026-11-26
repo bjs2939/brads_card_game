@@ -776,8 +776,10 @@ function chooseComputerAttack(game: Game, difficulty: Difficulty, roll: number, 
 
     return game.playerField.flatMap((defender, target) => {
       if (!defender || !canAttackTarget(unit, attacker, game.playerField, target)) return [];
-      // Hard only takes attacks whose effect can be established from public cards.
-      if (requireProductive && !defender.revealed) return [];
+      // Hidden identities never affect the decision. Favor proven hits over high-power blind attacks.
+      if (requireProductive && !defender.revealed) {
+        return power >= 8 ? [{ attacker, target, power, tacticalScore: 3 + Math.min(power, 20) / 100 }] : [];
+      }
       // Score face-down targets using only the computer's own attack power.
       let score = 2 + Math.min(power, 20) / 20;
       if (defender.revealed) {
