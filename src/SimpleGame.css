@@ -916,7 +916,7 @@
   top: 54%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: min(48px, 50%);
+  width: min(52.8px, 55%);
   height: auto;
   image-rendering: pixelated;
   pointer-events: none;
@@ -945,7 +945,7 @@
   top: 48%;
 }
 .card-ranger-overlay {
-  width: min(50px, 60%);
+  width: min(55px, 66%);
 }
 
 .deck-warning-overlay,
@@ -1033,7 +1033,7 @@
   .deck-warning-overlay, .joker-blast-overlay { animation-timing-function: steps(1, end); }
 }
 
-.card-knight-overlay { width: min(45px, 55%); }
+.card-knight-overlay { width: min(49.5px, 60.5%); }
 .four-shield-art .card-knight-overlay {
   top: 50%;
   transform: translate(-50%, -50%) rotate(-90deg);
@@ -1122,7 +1122,7 @@
   }
 }
 .drawn-hand-card { visibility: hidden; }
-.card-engineer-overlay { width: min(45px, 55%); }
+.card-engineer-overlay { width: min(49.5px, 60.5%); }
 
 .spy-button {
   padding: .4rem 1.1rem;
@@ -1811,4 +1811,24 @@
   padding: 0.45rem 0.65rem;
   color: #ffe5a6;
   font: 700 0.8rem/1.4 system-ui, sans-serif;
+}
+
+.match-setup label {
+  display: grid;
+  gap: 0.4rem;
+  margin-bottom: 0.85rem;
+  font: 700 0.9rem system-ui, sans-serif;
+}
+.match-setup select {
+  width: 100%;
+  border: 1px solid #96764c;
+  border-radius: 0.45rem;
+  padding: 0.55rem;
+  background: #193b40;
+  color: #fff2d5;
+  font: inherit;
+}
+.match-setup-result {
+  margin: 0 0 0.85rem;
+  color: #ffda8d;
 }

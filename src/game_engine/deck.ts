@@ -22,15 +22,16 @@ function extraJokers(): Card[] {
   return [{ type: "joker", color: "red", copy: 2 }, { type: "joker", color: "black", copy: 2 }];
 }
 
-export function createFullDeck(): Card[] {
-  return [...createStandardDeck(), { type: "joker", color: "red" }, { type: "joker", color: "black" }, ...extraJokers()];
+export function createFullDeck(jokerCount = 4): Card[] {
+  const jokers: Card[] = [{ type: "joker", color: "red" }, { type: "joker", color: "black" }, ...extraJokers()];
+  return [...createStandardDeck(), ...jokers.slice(0, jokerCount)];
 }
 
 export const tutorialDeploymentRanks = ["4", "5", "6"] as const;
 
 export function createTutorialDeck(): Card[] {
   // Keep the original scripted draw order and add the bonus Jokers after the lesson draws.
-  const cards = createFullDeck().filter(card => card.type !== "joker" || !card.copy);
+  const cards = createFullDeck(2);
   const opening: [Rank, Suit][] = [
     ["4", "hearts"], ["3", "clubs"],
     ["5", "spades"], ["4", "spades"],

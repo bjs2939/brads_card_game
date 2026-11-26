@@ -1075,14 +1075,14 @@ function finishPlayerAttack(game: Game): Game {
   return drawForTurn({ ...game, extraAttack: false }, "computer");
 }
 
-function startGame(tutorial = false): Game {
+function startGame(tutorial = false, starter: Side = "player", jokerCount = 4): Game {
   const opening: Game = {
-    ...dealSimpleGame(tutorial ? createTutorialDeck() : undefined),
+    ...dealSimpleGame(tutorial ? createTutorialDeck() : shuffleDeck(createFullDeck(jokerCount))),
     playerField: [],
     backRankAtTurnStart: [],
     computerField: [],
     discardPile: [],
-    phase: "player",
+    phase: tutorial ? "player" : starter,
     step: "move-out",
     round: { id: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`, at: Date.now() },
     turn: 1,
@@ -1471,6 +1471,29 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   onGarbageMusicChange: (active: boolean) => void;
 }) {
   const [game, setGame] = useState(() => startGame(tutorial));
+  const needsGameSetup = !tutorial && !trainingGrounds;
+  const [setupPending, setSetupPending] = useState(needsGameSetup);
+  const [firstTurn, setFirstTurn] = useState<Side | "flip">("flip");
+  const [jokerCount, setJokerCount] = useState(4);
+  const [flipWinner, setFlipWinner] = useState<Side | null>(null);
+  const setupDialog = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = setupDialog.current;
+    if (setupPending && dialog && !dialog.open) dialog.showModal();
+    if (!setupPending && dialog?.open) dialog.close();
+  }, [setupPending]);
+
+  function startConfiguredMatch() {
+    const starter = firstTurn === "flip" ? flipWinner : firstTurn;
+    if (!starter) {
+      setFlipWinner(Math.random() < 0.5 ? "player" : "computer");
+      return;
+    }
+    setGame(startGame(false, starter, jokerCount));
+    setSetupPending(false);
+  }
+
   const [matchTips, setMatchTips] = useState(() => shuffleDeck(opponentTips));
   const [compactBoard, setCompactBoard] = useState(() => window.matchMedia(compactBoardQuery).matches);
   const [showMatchInfo, setShowMatchInfo] = useState(!compactBoard);
@@ -1604,7 +1627,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     if (convertTarget !== null && dialog && !dialog.open) dialog.showModal();
     if (convertTarget === null && dialog?.open) dialog.close();
   }, [convertTarget]);
-  const paused = pauseRequested || utilityOpen || !!activeLesson || convertTarget !== null;
+  const paused = setupPending || pauseRequested || utilityOpen || !!activeLesson || convertTarget !== null;
   const healthStats = useRef<HTMLDListElement>(null);
   useEffect(() => {
     if (activeLesson !== "health-stats") return;
@@ -1931,7 +1954,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const nextStep = tutorialOpening || tutorialGuided ? undefined : nextPlayerStep(game);
   const moveOutExhausted = !canStackSelected && game.turn > 2 && isMovingOut && !aimingAttack && !game.selectedStack && !game.selectedSpecial && !hasMoveOutAction(game);
   const moveUpBlocked = !canStackSelected && isMovingUp && !aimingAttack && !game.selectedStack && !game.selectedSpecial && !canMoveUp(game.playerField);
-  const openingBackFilled = game.turn === 1 && isMovingOut && !hasOpenLane;
+  const openingBackFilled = game.turn <= 2 && isMovingOut && !hasOpenLane;
   const jokerOnlyTurn = !offenseRestricted && canEndTurn && !showingCombatEffect && hasOnlyJoker(game);
   const skipAttack = !offenseRestricted && canEndTurn && !showingCombatEffect && hasNoAttackOptions(game);
 
@@ -1988,7 +2011,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             (skipAttack && hasNoAttackOptions(current)))) {
           return finishPlayerTurn(current);
         }
-        if (current.turn === 1 && current.step === "move-out" && !openLanes(current.playerField, "back").length) {
+        if (current.turn <= 2 && current.step === "move-out" && !openLanes(current.playerField, "back").length) {
           return finishPlayerTurn(current);
         }
         if (current.step === "move-up" && !canMoveUp(current.playerField)) {
@@ -2978,9 +3001,9 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     if (isMovingOut && tutorialRank) return tutorialRank === "5"
       ? "Locke: One down. Deploy the highlighted 5 before the Commander starts counting."
       : `Commander Garrison: Deploy the highlighted ${tutorialRank} to your back rank.`;
-    if (isMovingOut && game.turn <= 2) return tutorial
-      ? "Play cards into the back rank, then press END TURN."
-      : "You go first and skip the opening draw. Play cards into the back rank, then press END TURN.";
+    if (isMovingOut && game.turn <= 2) return !tutorial && game.turn === 1
+      ? "You go first and skip the opening draw. Play cards into the back rank, then press END TURN."
+      : "Play cards into the back rank, then press END TURN.";
     if (offenseRestricted) return "Move, deploy, or equip shields, then end your turn. You can also retreat a card.";
     if (isMovingOut) return "Play cards from your hand into the back rank.";
     if (castleTargeting) return "Castle exposed. Choose one of the computer’s face-down hand cards.";
@@ -3087,6 +3110,32 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
 
   return (
     <main ref={board} className="simple-game-table" data-paused={paused} onClickCapture={unlockSound}>
+      <dialog ref={setupDialog} className="game-mode-picker match-setup" aria-labelledby="match-setup-title"
+        onCancel={event => { event.preventDefault(); onBack(); }}>
+        <h2 id="match-setup-title">Game Setup</h2>
+        <label>First turn
+          <select value={firstTurn} onChange={event => {
+            setFirstTurn(event.target.value as Side | "flip");
+            setFlipWinner(null);
+          }}>
+            <option value="flip">Flip a coin</option>
+            <option value="player">Player first</option>
+            <option value="computer">Computer first</option>
+          </select>
+        </label>
+        <label>Jokers
+          <select value={jokerCount} onChange={event => setJokerCount(Number(event.target.value))}>
+            {[0, 1, 2, 3, 4].map(count => <option key={count} value={count}>{count}</option>)}
+          </select>
+        </label>
+        {flipWinner && firstTurn === "flip" && (
+          <p className="match-setup-result" role="status">{flipWinner === "player" ? "Heads · You go first." : "Tails · Computer goes first."}</p>
+        )}
+        <div className="game-mode-options">
+          <button onClick={startConfiguredMatch}>{firstTurn === "flip" && !flipWinner ? "Flip Coin" : "Start Match"}</button>
+          <button onClick={onBack}>Back to Home</button>
+        </div>
+      </dialog>
       {activeLesson && (
         <TutorialBattleDialogue key={activeLesson} lesson={activeLesson} audio={soundEnabled ? tutorialAudio : null}
           onDone={() => {
@@ -3323,7 +3372,13 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             : "Both sides ran out of cards."}</p>
           {game.result && <p>{game.result}</p>}
           <div className="match-result-actions">
-            <button onClick={() => { setSeenLessons(new Set()); setMatchTips(shuffleDeck(opponentTips)); setGame(startGame(tutorial)); }}>Play Again</button>
+            <button onClick={() => {
+              setSeenLessons(new Set());
+              setMatchTips(shuffleDeck(opponentTips));
+              setGame(startGame(tutorial));
+              setFlipWinner(null);
+              setSetupPending(needsGameSetup);
+            }}>Play Again</button>
             <button onClick={onBack}>Back to Home</button>
           </div>
         </section>
@@ -3362,7 +3417,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           <span key={step} aria-current={game.step === step ? "step" : undefined}>{turnSteps[step]}</span>
         ))}
       </div>
-      {!isComputer && game.step !== "draw" && !skipAttack && queenCue !== "2nd Attack!" && (
+      {!setupPending && !isComputer && game.step !== "draw" && !skipAttack && queenCue !== "2nd Attack!" && (
         <div key={`${game.turn}-${game.step}`} className="player-step-cue" aria-hidden="true">
           {turnSteps[game.step]}!
         </div>
@@ -3409,7 +3464,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       </div>
       <h2 className="opponent-hand-heading">Computer’s hand</h2>
       <div className="hand-row opponent-hand-row" data-castle-targeting={castleTargeting} style={compactBoard ? undefined : handLayout}>
-        {Array.from({ length: game.computer.length }, (_, index) => (
+        {Array.from({ length: setupPending ? 0 : game.computer.length }, (_, index) => (
           <div key={index} data-card-position={`computer-${index}`}>
             {castleTargeting ? (
               <button className="simple-game-castle-target" aria-label={`Attack castle, hidden card ${index + 1}`} onClick={() => attackCastle(index)}>
@@ -3632,7 +3687,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       </div>
       {choosingHandStack && <p className="touch-stack-hint">Tap a matching hand card, then tap its stack.</p>}
       <div className="hand-row player-hand-row" style={compactBoard ? undefined : handLayout}>
-        {game.player.map((card, index) => (
+        {!setupPending && game.player.map((card, index) => (
           <button
             key={cardKey(card)}
             data-card-position={`player-${index}`}
