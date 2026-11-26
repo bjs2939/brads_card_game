@@ -173,6 +173,19 @@ export const tutorialLessons = {
     { speaker: "locke", text: "Their 9♠ against our 9♥. Two nines walk into a battlefield. One has read the Weapon Triangle." },
     { speaker: "garrison", text: "Hearts beat Spades, Spades beat Clubs, Clubs beat Hearts. Diamonds are neutral. Our 9♥ gains +1 here, so it hits for 10. Select it and attack the 9♠." },
   ],
+  "health-stats": [
+    { speaker: "garrison", text: "Look at Match Details. You have 13 cards, the opponent has 10, and 17 remain in the draw deck. Player and Opponent Health count the cards in each hand and on the battlefield, including attached shields." },
+    { speaker: "locke", text: "More cards usually means more ways to attack or answer an attack. Thirteen against ten is a good sign, though I’ve lost bets with better odds." },
+  ],
+  "attack-shielded-stack": [
+    { speaker: "garrison", text: "Our line is strong. Select the 9♥ and attack that stack of 3s. It has a shield, so the first hit goes to the shield." },
+    { speaker: "locke", text: "Two soldiers hiding behind borrowed equipment. I respect the approach. I still want it gone." },
+  ],
+  "clear-the-stack": [
+    { speaker: "locke", text: "Shield’s gone. Those two 3s are still standing shoulder to shoulder. How touching." },
+    { speaker: "garrison", text: "Stacks combine power when they attack, but grouping up has a cost. If your attack reaches the combined defense of multiple cards it can hit, they can all go down together." },
+    { speaker: "locke", text: "Two 3s make 6. Our 9♥ has enough power to take out both. Select the 9 and hit the exposed stack." },
+  ],
 } satisfies Record<string, readonly DialogueLine[]>;
 
 export function TutorialBattleDialogue({ lesson, audio, onDone }: {
@@ -186,7 +199,7 @@ export function TutorialBattleDialogue({ lesson, audio, onDone }: {
   }, []);
 
   return (
-    <dialog ref={dialog} className="tutorial-battle-dialog" aria-labelledby="tutorial-title"
+    <dialog ref={dialog} className="tutorial-battle-dialog" data-lesson={lesson} aria-labelledby="tutorial-title"
       onCancel={event => { event.preventDefault(); }}>
       <TutorialDialogue lines={tutorialLessons[lesson]} audio={audio} actionLabel="Resume match" onDone={onDone} />
     </dialog>

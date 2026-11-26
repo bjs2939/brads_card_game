@@ -1613,3 +1613,11 @@
   color: #edf3fb;
   font-weight: 500;
 }
+
+.battle-health[data-tutorial-highlight] {
+  scroll-margin-top: 1.3rem;
+  border-radius: 0.5rem;
+  outline: 3px solid #ffd47c;
+  outline-offset: 4px;
+  box-shadow: 0 0 1.4rem #ffd47ca8;
+}

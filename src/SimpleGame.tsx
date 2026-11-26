@@ -1333,10 +1333,14 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const tutorialNines = tutorial && game.turn === 25 && game.phase === "player";
   const reinforcementsDeployed = tutorialReinforce && !game.player.some(isTutorialReinforcement);
   const reserveReady = tutorialNines && !game.player.some(isTutorialReadyTroop);
-  const tutorialGuided = tutorialDuel || tutorialRevenge || tutorialDeployHalfling || tutorialSlayDragon || tutorialReserveAttack || tutorialFollowup || tutorialImmunity || movingReserveToCover || tutorialReinforce || tutorialNines;
+  const tutorialStatsAttack = tutorial && (game.turn === 27 || game.turn === 29) && game.phase === "player";
+  const tutorialClearStack = tutorialStatsAttack && game.turn === 29;
+  const tutorialGuided = tutorialDuel || tutorialRevenge || tutorialDeployHalfling || tutorialSlayDragon || tutorialReserveAttack || tutorialFollowup || tutorialImmunity || movingReserveToCover || tutorialReinforce || tutorialNines || tutorialStatsAttack;
   const availableLesson = tutorial && game.turn === 2 && game.phase === "computer" ? "enemy-opening"
     : tutorial && game.phase === "player" && !game.attackAnimation && game.step !== "draw"
-      ? tutorialReinforce ? reinforcementsDeployed ? "ranger-immunity" : "reinforce"
+      ? tutorialStatsAttack ? tutorialClearStack ? "clear-the-stack"
+        : !seenLessons.has("health-stats") ? "health-stats" : "attack-shielded-stack"
+        : tutorialReinforce ? reinforcementsDeployed ? "ranger-immunity" : "reinforce"
         : tutorialNines ? reserveReady ? "nine-versus-nine"
           : game.step === "move-out" ? "keep-the-ranks-ready" : "threes-stack"
         : tutorialCounterHearts ? "hearts-break-shield"
@@ -1358,6 +1362,16 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       : undefined;
   const activeLesson = availableLesson && !seenLessons.has(availableLesson) ? availableLesson : undefined;
   const paused = pauseRequested || utilityOpen || !!activeLesson;
+  const healthStats = useRef<HTMLDListElement>(null);
+  useEffect(() => {
+    if (activeLesson !== "health-stats") return;
+    setShowMatchInfo(true);
+    const frame = window.requestAnimationFrame(() => {
+      healthStats.current?.scrollIntoView({ block: "start", inline: "nearest" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeLesson]);
+
   const labDialog = useRef<HTMLDialogElement>(null);
   const [labZone, setLabZone] = useState<LabZone>("player");
   const [labCard, setLabCard] = useState(0);
@@ -1616,7 +1630,14 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const jokerOnlyTurn = canEndTurn && !showingCombatEffect && hasOnlyJoker(game);
   const skipAttack = canEndTurn && !showingCombatEffect && hasNoAttackOptions(game);
 
+  function isTutorialStackTarget(unit: Unit, index: number, field = game.computerField) {
+    const lane = laneCards(field, laneOf(unit, index));
+    return unit.card.type === "standard" && unit.card.rank === "3" && lane.length > 1 &&
+      lane.some(entry => entry.unit.shields?.length) !== tutorialClearStack;
+  }
+
   function canPickOwnUnit(unit: Unit, index: number) {
+    if (tutorialStatsAttack) return game.step === "attack" && isTutorialNine(unit.card);
     if (tutorialReinforce) return game.step === "attack" && isTutorialSix(unit.card);
     if (tutorialNines) return game.step === "move-up" ? fieldRank(unit, index) === "back" && isTutorialReinforcement(unit.card)
       : game.step === "attack" && isTutorialNine(unit.card);
@@ -1778,13 +1799,18 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             const managed = manageHardShields(current, field, used);
             field = managed.field;
             movedShield = managed.moved;
-          } else if (!tutorial || current.turn < 12 || current.turn > 24) {
+          } else if (!tutorial || current.turn < 12 || (current.turn > 24 && current.turn !== 28)) {
             const shieldTargets = field.flatMap((unit, index) => unit && canShield(unit) ? [index] : []);
             shieldTargets.sort((a, b) => laneOf(field[a]!, a) - laneOf(field[b]!, b));
             const shields = current.computer.filter(isShield);
             if (shieldTargets.length) {
               shields.forEach((card, index) => {
-                const slot = shieldTargets[index % shieldTargets.length];
+                const stackShieldTarget = tutorial && current.turn === 26 && card.type === "standard" &&
+                  card.rank === "Q" && card.suit === "spades"
+                  ? field.findIndex((unit, index) => unit?.card.type === "standard" && unit.card.rank === "3" &&
+                    laneCards(field, laneOf(unit, index)).length > 1)
+                  : -1;
+                const slot = stackShieldTarget >= 0 ? stackShieldTarget : shieldTargets[index % shieldTargets.length];
                 const unit = field[slot];
                 if (!unit) return;
                 used.add(card);
@@ -1865,7 +1891,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             return drawForTurn({ ...resolved, phase: "player" }, "player");
           }
         }
-        if (tutorial && current.turn === 14) {
+        if (tutorial && (current.turn === 14 || current.turn === 26 || current.turn === 28)) {
           return drawForTurn({ ...current, phase: "player", result: "The opponent held its position." }, "player");
         }
         if (difficulty === "Sandbox") {
@@ -2314,6 +2340,11 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
         if (!current.tutorialBlockedAttack) return { ...current, selected: null, tutorialBlockedAttack: true };
       }
 
+      if (tutorialStatsAttack) {
+        const source = current.selected === null ? null : current.playerField[current.selected];
+        if (current.step !== "attack" || !source || !isTutorialNine(source.card) ||
+            !isTutorialStackTarget(defender, index, current.computerField)) return current;
+      }
       if (tutorialReinforce || tutorialNines) {
         const source = current.selected === null ? null : current.playerField[current.selected];
         if (current.step !== "attack" || !source ||
@@ -2443,6 +2474,9 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     if (transferringTutorialShield) return game.movingShield
       ? "Garrison: Select the 8 of Clubs to receive the Jack."
       : "Locke: Select the shielded 2 to move its Jack.";
+    if (tutorialStatsAttack && game.step !== "draw") return aimingAttack
+      ? tutorialClearStack ? "Locke: Attack the exposed stack of 3s." : "Locke: Attack the shielded stack of 3s."
+      : "Garrison: Select the 9♥.";
     if (tutorialReinforce && game.step !== "draw") return game.step === "attack"
       ? aimingAttack ? "Locke: Attack the shield on the 5♦." : "Garrison: Select the 6♥."
       : "Garrison: Deploy the 8♠ and 9♥.";
@@ -2597,7 +2631,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           onDone={() => {
             setSeenLessons(current => new Set([...current, activeLesson]));
             if (activeLesson === "free-shield" || activeLesson === "reinforce") setGame(current => advancePlayerStep(current, "move-out"));
-            if (activeLesson === "triangle" || activeLesson === "break-queen-shield" || activeLesson === "take-out-three" || activeLesson === "press-the-advantage" || activeLesson === "hearts-break-shield" || activeLesson === "ranger-immunity" || activeLesson === "nine-versus-nine") {
+            if (activeLesson === "triangle" || activeLesson === "break-queen-shield" || activeLesson === "take-out-three" || activeLesson === "press-the-advantage" || activeLesson === "hearts-break-shield" || activeLesson === "ranger-immunity" || activeLesson === "nine-versus-nine" || activeLesson === "attack-shielded-stack" || activeLesson === "clear-the-stack") {
               setGame(current => advancePlayerStep(current, "attack"));
             }
           }} />
@@ -2918,7 +2952,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
               <button type="submit" disabled={!matchNote.trim()}>Add</button>
             </form>
           </div>
-          <dl className="battle-health">
+          <dl ref={healthStats} className="battle-health" data-tutorial-highlight={activeLesson === "health-stats" || undefined}>
             <div className="battle-health-opponent">
               <dt>Opponent Health</dt>
               <dd>{health(game.computer, game.computerField)}</dd>
@@ -2952,6 +2986,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
                 (!tutorialFollowup || tutorialFollowupTarget(unit.card)) &&
                 (!tutorialImmunity || isTutorialEnemyFour(unit.card)) &&
                 (!tutorialReinforce || isTutorialEnemyFive(unit.card)) && (!tutorialNines || isTutorialEnemyNine(unit.card)) &&
+                (!tutorialStatsAttack || isTutorialStackTarget(unit, index)) &&
                 (!tutorialReserveAttack || (reserveShielded && isTutorialEnemyEight(unit.card))) && (!tutorialDeployHalfling || index === rangerTarget) && (!!game.selectedSpecial || (
                 !!selectedUnit && selected !== null && canAttackTarget(selectedUnit, selected, game.computerField, index)
               ))}

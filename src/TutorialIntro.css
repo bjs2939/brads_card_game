@@ -107,3 +107,5 @@
 
 .tutorial-battle-dialog::backdrop { background: #080f1ac9; }
 .tutorial-battle-dialog .tutorial-overlay { padding: 0; background: none; }
+
+.tutorial-battle-dialog[data-lesson="health-stats"]::backdrop { background: #080f1a70; }
