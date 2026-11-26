@@ -153,9 +153,25 @@ export const tutorialLessons = {
     { speaker: "garrison", text: "Hearts beat Spades. The 7 gained +1 against the shield, reaching its strength of 8. The shield absorbed the hit, so the 8 of Clubs survives." },
     { speaker: "locke", text: "A 7 of Spades would block our Clubs attack, but this is Hearts. Select your 8 of Clubs and take out their 7 of Hearts." },
   ],
-  "practice-alone": [
-    { speaker: "garrison", text: "You’re on your own for a few turns. Use the 8 of Clubs or the ranged 6 of Hearts against revealed cards. Check the power and suit before you strike and you’ll be fine." },
-    { speaker: "locke", text: "Look at that. Trusted with the castle, and I’m still doing community service." },
+  "reinforce": [
+    { speaker: "locke", text: "Their 9♠ just took out our 8♣. I’d complain about the odds, but nine is, regrettably, bigger than eight." },
+    { speaker: "garrison", text: "We need more firepower. Deploy your 8♠ and 9♥ to the back rank. They’ll be ready to advance next turn." },
+  ],
+  "ranger-immunity": [
+    { speaker: "garrison", text: "A card in the back rank can’t attack unless it’s a 6. Select our ranger and aim at the shield on their 5♦. Remember: the shield has its own suit." },
+    { speaker: "locke", text: "And it’s face down. Very considerate of the enemy to keep their paperwork private." },
+  ],
+  "threes-stack": [
+    { speaker: "locke", text: "That shield was Clubs, so our Hearts shot bounced. Then two 3s teamed up and took out our 6. I object to teamwork when it’s theirs." },
+    { speaker: "garrison", text: "Think of two little soldiers pushing together. A 3 and another 3 make 6 power. Matching ranks from 2 to 7 can stack. Each card checks its own suit first, then you add what’s left. Six power ties our 6, and the attacker wins ties." },
+    { speaker: "locke", text: "Our ranger has been defeated by addition. Move up the 9♥ and 8♠. Let’s try subtraction." },
+  ],
+  "keep-the-ranks-ready": [
+    { speaker: "garrison", text: "Deploy the 10♣ and 4♦ to the back rank. Keep enough troops ready to replace losses. You can leave slots open when that suits your plan." },
+  ],
+  "nine-versus-nine": [
+    { speaker: "locke", text: "Their 9♠ against our 9♥. Two nines walk into a battlefield. One has read the Weapon Triangle." },
+    { speaker: "garrison", text: "Hearts beat Spades, Spades beat Clubs, Clubs beat Hearts. Diamonds are neutral. Our 9♥ gains +1 here, so it hits for 10. Select it and attack the 9♠." },
   ],
 } satisfies Record<string, readonly DialogueLine[]>;
 

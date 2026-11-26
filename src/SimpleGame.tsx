@@ -232,6 +232,23 @@ function isTutorialEnemySeven(card: Card) {
   return card.type === "standard" && card.rank === "7" && card.suit === "hearts";
 }
 
+function isTutorialNine(card: Card) {
+  return card.type === "standard" && card.rank === "9" && card.suit === "hearts";
+}
+
+function isTutorialEnemyNine(card: Card) {
+  return card.type === "standard" && card.rank === "9" && card.suit === "spades";
+}
+
+function isTutorialReinforcement(card: Card) {
+  return isTutorialNine(card) || (card.type === "standard" && card.rank === "8" && card.suit === "spades");
+}
+
+function isTutorialReadyTroop(card: Card) {
+  return card.type === "standard" && ((card.rank === "10" && card.suit === "clubs") ||
+    (card.rank === "4" && card.suit === "diamonds"));
+}
+
 function isTutorialEnemyEight(card: Card) {
   return card.type === "standard" && card.rank === "8" && card.suit === "hearts";
 }
@@ -1312,10 +1329,16 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     : tutorialCounterHearts ? isTutorialEnemySeven : isTutorialEnemyThree;
   const tutorialImmunity = tutorial && game.turn === 17 && game.phase === "player";
   const tutorialImmunityAttacker = game.tutorialBlockedAttack ? isTutorialSix : isTutorialReserve;
-  const tutorialGuided = tutorialDuel || tutorialRevenge || tutorialDeployHalfling || tutorialSlayDragon || tutorialReserveAttack || tutorialFollowup || tutorialImmunity || movingReserveToCover;
+  const tutorialReinforce = tutorial && game.turn === 23 && game.phase === "player";
+  const tutorialNines = tutorial && game.turn === 25 && game.phase === "player";
+  const reinforcementsDeployed = tutorialReinforce && !game.player.some(isTutorialReinforcement);
+  const reserveReady = tutorialNines && !game.player.some(isTutorialReadyTroop);
+  const tutorialGuided = tutorialDuel || tutorialRevenge || tutorialDeployHalfling || tutorialSlayDragon || tutorialReserveAttack || tutorialFollowup || tutorialImmunity || movingReserveToCover || tutorialReinforce || tutorialNines;
   const availableLesson = tutorial && game.turn === 2 && game.phase === "computer" ? "enemy-opening"
     : tutorial && game.phase === "player" && !game.attackAnimation && game.step !== "draw"
-      ? game.turn === 23 ? "practice-alone"
+      ? tutorialReinforce ? reinforcementsDeployed ? "ranger-immunity" : "reinforce"
+        : tutorialNines ? reserveReady ? "nine-versus-nine"
+          : game.step === "move-out" ? "keep-the-ranks-ready" : "threes-stack"
         : tutorialCounterHearts ? "hearts-break-shield"
         : tutorialReplaceCover ? "replace-cover"
         : tutorialBreakShield ? "break-queen-shield"
@@ -1594,6 +1617,9 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const skipAttack = canEndTurn && !showingCombatEffect && hasNoAttackOptions(game);
 
   function canPickOwnUnit(unit: Unit, index: number) {
+    if (tutorialReinforce) return game.step === "attack" && isTutorialSix(unit.card);
+    if (tutorialNines) return game.step === "move-up" ? fieldRank(unit, index) === "back" && isTutorialReinforcement(unit.card)
+      : game.step === "attack" && isTutorialNine(unit.card);
     if (movingReserveToCover) return isTutorialReserve(unit.card) && fieldRank(unit, index) === "front";
     if (tutorialImmunity) return game.step === "attack" && tutorialImmunityAttacker(unit.card);
     if (tutorialFollowup) return game.step === "attack" && tutorialFollowupAttacker(unit.card);
@@ -1688,9 +1714,9 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             .filter(lane => laneCards(field, lane).some(({ unit }) => canDeploy(unit.card)))
             .sort((a, b) => laneCards(field, b).reduce((sum, { unit }) => sum + strength(unit.card), 0) -
               laneCards(field, a).reduce((sum, { unit }) => sum + strength(unit.card), 0));
-          if (tutorial && (current.turn === 10 || current.turn === 16 || current.turn === 20)) {
+          if (tutorial && (current.turn === 10 || current.turn === 16 || current.turn === 20 || current.turn === 22)) {
             const upcoming = current.turn === 10 ? isTutorialEnemyFive
-              : current.turn === 16 ? isTutorialEnemyFour : isTutorialEnemySeven;
+              : current.turn === 16 ? isTutorialEnemyFour : current.turn === 20 ? isTutorialEnemySeven : isTutorialEnemyNine;
             const source = sources.findIndex(lane => laneCards(field, lane).some(({ unit }) => upcoming(unit.card)));
             if (source > 0) sources.unshift(...sources.splice(source, 1));
           }
@@ -1738,12 +1764,21 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
               used.add(stackCard);
             }
           }
+          if (tutorial && current.turn === 22) {
+            const fiveIndex = field.findIndex(unit => unit && isTutorialEnemyFive(unit.card));
+            const jack = current.computer.find(card => card.type === "standard" && card.rank === "J" && card.suit === "clubs");
+            const five = field[fiveIndex];
+            if (five && jack) {
+              field[fiveIndex] = { ...five, shields: [...(five.shields ?? []), { card: jack, revealed: false }] };
+              used.add(jack);
+            }
+          }
           let movedShield = false;
           if (difficulty === "Hard") {
             const managed = manageHardShields(current, field, used);
             field = managed.field;
             movedShield = managed.moved;
-          } else if (!tutorial || current.turn < 12 || current.turn > 20) {
+          } else if (!tutorial || current.turn < 12 || current.turn > 24) {
             const shieldTargets = field.flatMap((unit, index) => unit && canShield(unit) ? [index] : []);
             shieldTargets.sort((a, b) => laneOf(field[a]!, a) - laneOf(field[b]!, b));
             const shields = current.computer.filter(isShield);
@@ -1795,15 +1830,38 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
         if (tutorial && current.turn === 10) {
           return drawForTurn({ ...current, phase: "player", result: "The opponent held its position." }, "player");
         }
-        if (tutorial && (current.turn === 12 || current.turn === 16 || current.turn === 18 || current.turn === 20)) {
+        if (tutorial && (current.turn === 12 || current.turn === 16 || current.turn === 18 || current.turn === 20 || current.turn === 22)) {
           const scriptedAttacker = current.turn === 12 ? isTutorialEnemyThree
-            : current.turn === 16 ? isTutorialEnemyFour : current.turn === 18 ? isTutorialEnemyFive : isTutorialEnemySeven;
+            : current.turn === 16 ? isTutorialEnemyFour : current.turn === 18 ? isTutorialEnemyFive : current.turn === 20 ? isTutorialEnemySeven : isTutorialEnemyNine;
           const scriptedTarget = current.turn === 18 ? isTutorialTwo : isTutorialReserve;
           const attacker = current.computerField.findIndex((unit, index) =>
             unit && scriptedAttacker(unit.card) && fieldRank(unit, index) === "front");
           const target = current.playerField.findIndex(unit => unit && scriptedTarget(unit.card));
           if (attacker >= 0 && target >= 0) {
             const resolved = resolveAttack({ ...current, phase: "computer" }, "computer", attacker, target);
+            return drawForTurn({ ...resolved, phase: "player" }, "player");
+          }
+        }
+        if (tutorial && current.turn === 24) {
+          const target = current.playerField.findIndex(unit => unit && isTutorialSix(unit.card));
+          const field = [...current.computerField];
+          const threes = (["hearts", "diamonds"] as const).flatMap(suit => {
+            const matches = (card: Card) => card.type === "standard" && card.rank === "3" && card.suit === suit;
+            const position = field.findIndex(unit => unit && matches(unit.card));
+            const unit = field[position];
+            if (unit) { field[position] = null; return [unit]; }
+            const card = current.computer.find(matches);
+            return card ? [deploy(card)] : [];
+          });
+          if (target >= 0 && threes.length === 2) {
+            const lane = openLanes(field, "front")[0] ?? rankLanes.front[0];
+            const displaced = laneCards(field, lane);
+            for (const { index } of displaced) field[index] = null;
+            field[lane] = { ...threes[0], lane };
+            const computer = current.computer.filter(card => !threes.some(unit => unit.card === card));
+            for (const { unit } of displaced) computer.push(unit.card, ...(unit.shields ?? []).map(layer => layer.card));
+            const ready: Game = { ...current, phase: "computer", computer, computerField: addToStack(field, threes[1], lane) };
+            const resolved = resolveAttack(ready, "computer", lane, target);
             return drawForTurn({ ...resolved, phase: "player" }, "player");
           }
         }
@@ -2020,6 +2078,8 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       const unit = current.playerField[index];
       if (!unit || current.phase !== "player" || current.pendingAttack || current.specialStrike) return current;
 
+      if (tutorialNines && !canPickOwnUnit(unit, index)) return current;
+      if (tutorialReinforce && !canPickOwnUnit(unit, index)) return current;
       if (tutorialReserveAttack) {
         if (!isTutorialReserve(unit.card)) return current;
         if (current.step === "move-up" && fieldRank(unit, index) === "back") {
@@ -2254,6 +2314,13 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
         if (!current.tutorialBlockedAttack) return { ...current, selected: null, tutorialBlockedAttack: true };
       }
 
+      if (tutorialReinforce || tutorialNines) {
+        const source = current.selected === null ? null : current.playerField[current.selected];
+        if (current.step !== "attack" || !source ||
+            (tutorialReinforce ? !isTutorialSix(source.card) || !isTutorialEnemyFive(defender.card)
+              : !isTutorialNine(source.card) || !isTutorialEnemyNine(defender.card))) return current;
+      }
+
       const shouldWarn = difficulty === "Easy" && !confirmed && defender.revealed && defender.card.type === "standard";
       if (current.selectedSpecial) {
         const specialCard = current.selectedSpecial;
@@ -2376,6 +2443,13 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     if (transferringTutorialShield) return game.movingShield
       ? "Garrison: Select the 8 of Clubs to receive the Jack."
       : "Locke: Select the shielded 2 to move its Jack.";
+    if (tutorialReinforce && game.step !== "draw") return game.step === "attack"
+      ? aimingAttack ? "Locke: Attack the shield on the 5♦." : "Garrison: Select the 6♥."
+      : "Garrison: Deploy the 8♠ and 9♥.";
+    if (tutorialNines && game.step !== "draw") return game.step === "move-up"
+      ? "Locke: Move the 9♥ and 8♠ to the front rank."
+      : game.step === "move-out" ? "Garrison: Deploy the 10♣ and 4♦."
+        : aimingAttack ? "Locke: Attack the 9♠." : "Garrison: Select the 9♥.";
     if (movingReserveToCover && game.step !== "draw") return "Garrison: Move the 8 directly in front of the 6.";
     if (tutorialImmunity && game.step !== "draw") return aimingAttack
       ? "Choose the 4 of Spades."
@@ -2507,6 +2581,8 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       if (!halflingShielded) return game.step !== "draw" && isTutorialJack(card);
       return canDeployFromHand && !reserveDeployed && isTutorialReserve(card);
     }
+    if (tutorialReinforce) return isMovingOut && canDeployFromHand && isTutorialReinforcement(card);
+    if (tutorialNines) return isMovingOut && canDeployFromHand && isTutorialReadyTroop(card);
     if (tutorialGuided) return false;
     if (tutorialOpening) return canDeployFromHand && card === tutorialDeployment;
     if (isShield(card)) return canChooseShield || (isJack(card) && canSpy) || (isQueen(card) && canDoubleAttack);
@@ -2520,8 +2596,8 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
         <TutorialBattleDialogue key={activeLesson} lesson={activeLesson} audio={soundEnabled ? tutorialAudio : null}
           onDone={() => {
             setSeenLessons(current => new Set([...current, activeLesson]));
-            if (activeLesson === "free-shield") setGame(current => advancePlayerStep(current, "move-out"));
-            if (activeLesson === "triangle" || activeLesson === "break-queen-shield" || activeLesson === "take-out-three" || activeLesson === "press-the-advantage" || activeLesson === "hearts-break-shield") {
+            if (activeLesson === "free-shield" || activeLesson === "reinforce") setGame(current => advancePlayerStep(current, "move-out"));
+            if (activeLesson === "triangle" || activeLesson === "break-queen-shield" || activeLesson === "take-out-three" || activeLesson === "press-the-advantage" || activeLesson === "hearts-break-shield" || activeLesson === "ranger-immunity" || activeLesson === "nine-versus-nine") {
               setGame(current => advancePlayerStep(current, "attack"));
             }
           }} />
@@ -2875,6 +2951,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
                 (!tutorialSlayDragon || isTutorialDragon(unit.card)) &&
                 (!tutorialFollowup || tutorialFollowupTarget(unit.card)) &&
                 (!tutorialImmunity || isTutorialEnemyFour(unit.card)) &&
+                (!tutorialReinforce || isTutorialEnemyFive(unit.card)) && (!tutorialNines || isTutorialEnemyNine(unit.card)) &&
                 (!tutorialReserveAttack || (reserveShielded && isTutorialEnemyEight(unit.card))) && (!tutorialDeployHalfling || index === rangerTarget) && (!!game.selectedSpecial || (
                 !!selectedUnit && selected !== null && canAttackTarget(selectedUnit, selected, game.computerField, index)
               ))}
@@ -2996,7 +3073,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             className={[
               choosingHandCard === card ? "simple-game-selected-shield" : inspected === card ? "card-inspected" : "",
               game.step === "draw" && game.drawnCard === card ? "drawn-hand-card" : "",
-              isMovingOut && (tutorialDeployment === card || (tutorialDeployHalfling && canUseHandCard(card)))
+              isMovingOut && (tutorialDeployment === card || ((tutorialDeployHalfling || tutorialReinforce || tutorialNines) && canUseHandCard(card)))
                 ? "tutorial-deploy-card" : "",
             ].filter(Boolean).join(" ")}
             onClick={() => {
