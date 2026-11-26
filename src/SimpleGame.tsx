@@ -374,6 +374,13 @@ function hasHandStack(field: Field, card: Card) {
   );
 }
 
+function openingPlaysExhausted(game: Game, tutorial: boolean) {
+  if (game.phase !== "player" || game.turn > 2 || game.step !== "move-out") return false;
+  if (tutorial) return openLanes(game.playerField, "back").length === 0;
+  const canAttachShield = game.playerField.some(canShield) && game.player.some(isShield);
+  return !hasMoveOutAction(game) && !canAttachShield && !game.player.some(card => hasHandStack(game.playerField, card));
+}
+
 function moveUp(field: Field, from: number, to: number): Field {
   if (!rankLanes.back.includes(from) || !openLanes(field, "front").includes(to)) return field;
   const moving = laneCards(field, from);
@@ -1954,7 +1961,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const nextStep = tutorialOpening || tutorialGuided ? undefined : nextPlayerStep(game);
   const moveOutExhausted = !canStackSelected && game.turn > 2 && isMovingOut && !aimingAttack && !game.selectedStack && !game.selectedSpecial && !hasMoveOutAction(game);
   const moveUpBlocked = !canStackSelected && isMovingUp && !aimingAttack && !game.selectedStack && !game.selectedSpecial && !canMoveUp(game.playerField);
-  const openingBackFilled = game.turn <= 2 && isMovingOut && !hasOpenLane;
+  const openingExhausted = openingPlaysExhausted(game, tutorial);
   const jokerOnlyTurn = !offenseRestricted && canEndTurn && !showingCombatEffect && hasOnlyJoker(game);
   const skipAttack = !offenseRestricted && canEndTurn && !showingCombatEffect && hasNoAttackOptions(game);
 
@@ -2003,7 +2010,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   }
 
   useEffect(() => {
-    if ((!moveOutExhausted && !moveUpBlocked && !openingBackFilled && !jokerOnlyTurn && !skipAttack) || outcome || immunityWarningOpen || paused || showingCombatEffect) return;
+    if ((!moveOutExhausted && !moveUpBlocked && !openingExhausted && !jokerOnlyTurn && !skipAttack) || outcome || immunityWarningOpen || paused || showingCombatEffect) return;
     const timer = window.setTimeout(() => {
       setGame(current => {
         if (current.phase !== "player") return current;
@@ -2011,7 +2018,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             (skipAttack && hasNoAttackOptions(current)))) {
           return finishPlayerTurn(current);
         }
-        if (current.turn <= 2 && current.step === "move-out" && !openLanes(current.playerField, "back").length) {
+        if (openingPlaysExhausted(current, tutorial)) {
           return finishPlayerTurn(current);
         }
         if (current.step === "move-up" && !canMoveUp(current.playerField)) {
@@ -2021,7 +2028,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       });
     }, 650);
     return () => window.clearTimeout(timer);
-  }, [moveOutExhausted, moveUpBlocked, openingBackFilled, jokerOnlyTurn, skipAttack, game.turn, outcome, immunityWarningOpen, paused, showingCombatEffect]);
+  }, [moveOutExhausted, moveUpBlocked, openingExhausted, jokerOnlyTurn, skipAttack, game.turn, outcome, immunityWarningOpen, paused, showingCombatEffect, tutorial]);
 
   const finishDraw = useCallback((turn: number) => {
     setGame(current => current.phase === "player" && current.step === "draw" && current.turn === turn
@@ -2997,7 +3004,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
         : "Choose a highlighted slot in your front rank.";
     }
     if (moveOutExhausted) return hasOpenLane ? "No more cards can be placed. Advancing…" : "Back rank full. Advancing…";
-    if (openingBackFilled) return "Back rank full. Ending turn…";
+    if (openingExhausted) return tutorial ? "Back rank full. Ending turn…" : "No cards left to play. Ending turn…";
     if (isMovingOut && tutorialRank) return tutorialRank === "5"
       ? "Locke: One down. Deploy the highlighted 5 before the Commander starts counting."
       : `Commander Garrison: Deploy the highlighted ${tutorialRank} to your back rank.`;
