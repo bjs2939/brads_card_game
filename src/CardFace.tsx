@@ -34,7 +34,7 @@ export default function CardFace({ card, faceDown = false }: { card?: Card; face
   const character = faceDown || !card ? undefined
     : card.type === "joker" ? { sprite: "joker-bomb", className: "card-ranger-overlay", size: 50 }
     : suitSprite
-      ? { sprite: suitSprite, className: "card-ranger-overlay", size: 60 }
+      ? { sprite: suitSprite, className: suitSprite === "unicorn-lancer-8-clubs" ? "card-unicorn-lancer-overlay" : "card-ranger-overlay", size: 60 }
       : characters[card.rank];
 
   return (

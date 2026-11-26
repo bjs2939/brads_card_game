@@ -947,6 +947,9 @@
 .card-ranger-overlay {
   width: min(55px, 66%);
 }
+.card-unicorn-lancer-overlay {
+  width: min(70px, 82%);
+}
 
 .deck-warning-overlay,
 .joker-blast-overlay {
