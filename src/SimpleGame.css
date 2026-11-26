@@ -1685,6 +1685,7 @@
 
 /* Keep vertical scrolling available while a horizontal finger drag moves a card. */
 [data-touch-rearrange] { touch-action: pan-y pinch-zoom; }
+[data-touch-ranger-up] { touch-action: none; }
 [data-touch-target] {
   outline: 2px solid #ffd47c;
   outline-offset: 2px;

@@ -320,6 +320,10 @@ function attackRestricted(game: Game, side: Side = "player") {
   return game.convertRecovery?.[side]?.turn === game.turn;
 }
 
+function isRanger(card: Card) {
+  return card.type === "standard" && card.rank === "6";
+}
+
 function isHolyKnight(card: Card) {
   return card.type === "standard" && card.rank === "7";
 }
@@ -1297,7 +1301,7 @@ function BattlefieldRevealEffect({ card }: { card: Card }) {
     : <LegendaryLightning />;
 }
 
-function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick, canPick, onPickEmpty, canDrag, onDrag, onDragEnd, onDrop, onDropEmpty, onInspect, inspected, onDoublePick, highlighted = false, highlightRanged = false, moveGuide, onTouchRearrange, revealedEffectCards, onPickShield, movingShield, recoveringKnights, shieldDropTarget, allowShieldDrop }: {
+function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick, canPick, onPickEmpty, canDrag, onDrag, onDragEnd, onDrop, onDropEmpty, onInspect, inspected, onDoublePick, highlighted = false, highlightRanged = false, moveGuide, onTouchRearrange, revealedEffectCards, onPickShield, movingShield, recoveringKnights, shieldDropTarget, allowShieldDrop, allowRangerPromotion }: {
   onInspect?: (card: Card | null) => void;
   inspected?: Card | null;
   units: Field;
@@ -1307,6 +1311,7 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
   recoveringKnights?: readonly Card[];
   shieldDropTarget?: number;
   allowShieldDrop?: boolean;
+  allowRangerPromotion?: boolean;
   label: string;
   rank: FieldRank;
   onPickEmpty?: (lane: number) => void;
@@ -1329,9 +1334,13 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
   const suppressTouchClick = useRef(false);
   const [touchPreview, setTouchPreview] = useState<{ index: number; x: number; y: number; lane?: number } | null>(null);
 
-  function touchLane(event: React.PointerEvent<HTMLDivElement>) {
+  function touchLane(event: React.PointerEvent<HTMLDivElement>, index: number) {
     const slot = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-field-lane]");
-    return slot && event.currentTarget.contains(slot) ? Number(slot.dataset.fieldLane) : undefined;
+    if (!slot) return undefined;
+    const unit = units[index];
+    const movingRangerUp = allowRangerPromotion && unit && isRanger(unit.card) &&
+      slot.matches(".field-slot") && slot.closest('[data-player-rank="front"]');
+    return event.currentTarget.contains(slot) || movingRangerUp ? Number(slot.dataset.fieldLane) : undefined;
   }
 
   function finishTouchDrag(event: React.PointerEvent<HTMLDivElement>) {
@@ -1342,20 +1351,20 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
     if (!drag.moved) return;
     suppressTouchClick.current = true;
     if (event.type !== "pointerup") return;
-    const lane = touchLane(event);
+    const lane = touchLane(event, drag.index);
     if (lane !== undefined) onTouchRearrange?.(drag.index, lane);
   }
 
   const touchedUnit = touchPreview && units[touchPreview.index];
   return (
-    <div role="group" aria-label={label} className={`battlefield-rank ${opponent ? "enemy-rank" : "player-rank"}${highlighted ? " rank-highlighted" : ""}`}
+    <div role="group" aria-label={label} data-player-rank={opponent ? undefined : rank} className={`battlefield-rank ${opponent ? "enemy-rank" : "player-rank"}${highlighted ? " rank-highlighted" : ""}`}
       onPointerDownCapture={() => { suppressTouchClick.current = false; }}
       onPointerMove={event => {
         const drag = touchDrag.current;
         if (!drag || drag.id !== event.pointerId) return;
         if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 8) return;
         drag.moved = true;
-        setTouchPreview({ index: drag.index, x: event.clientX, y: event.clientY, lane: touchLane(event) });
+        setTouchPreview({ index: drag.index, x: event.clientX, y: event.clientY, lane: touchLane(event, drag.index) });
       }}
       onPointerUp={finishTouchDrag}
       onPointerCancel={finishTouchDrag}
@@ -1489,6 +1498,7 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
                       {pickable || onInspect ? (
                         <button
                           data-touch-rearrange={onTouchRearrange && canDrag?.(index) ? true : undefined}
+                          data-touch-ranger-up={allowRangerPromotion && isRanger(unit.card) || undefined}
                           onPointerDown={event => {
                             if (event.pointerType !== "touch" || !event.isPrimary || !onTouchRearrange || !canDrag?.(index)) return;
                             touchDrag.current = { id: event.pointerId, index, x: event.clientX, y: event.clientY, moved: false };
@@ -2022,6 +2032,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     canAttackFrom(selectedUnit, game.selected, game.computerField, game.computer.length);
   const aimingAttack = selectedAttacker && !game.movingStack;
   const selectedBack = !!selectedUnit && game.selected !== null && fieldRank(selectedUnit, game.selected) === "back";
+  const selectedBackRanger = selectedBack && !!selectedUnit && isRanger(selectedUnit.card);
   const canChooseConvert = !tutorialGuided && !paused && !game.pendingAttack && !showingCombatEffect &&
     !game.movingStack && !!selectedAttacker && !!selectedUnit && isHolyKnight(selectedUnit.card) && opponentHasCards;
   const castleTargeting = !paused && !tutorialGuided && castleAttackerIndex(game) >= 0;
@@ -2180,6 +2191,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     if (game.selectedStack) return fieldRank(unit, index) === "back" && matchesStack(game.selectedStack, unit.card);
     if (game.movingStack && selected !== null) return index === selected || canMoveIntoStack(game, selected, index);
     if (canAttackNow && canAttackFrom(unit, index, game.computerField, game.computer.length)) return true;
+    if (!tutorialGuided && isMovingUp && fieldRank(unit, index) === "back" && isRanger(unit.card)) return true;
     if (isMovingUp && fieldRank(unit, index) === "back" && openLanes(game.playerField, "front").length > 0) return true;
 
     return index === selected || game.playerField.some((_, target) => canMoveIntoStack(game, index, target));
@@ -2761,6 +2773,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       if (shield) return equipShield(current, shield, index);
       if (current.step === "move-up" && !shield && !current.movingStack && !current.selectedSpecial &&
           fieldRank(unit, index) === "back") {
+        if (!tutorialGuided && isRanger(unit.card)) return { ...current, selected: current.selected === index ? null : index };
         const directlyAhead = laneOf(unit, index) - slotsPerRank;
         const destination = tutorialGuided
           ? openLanes(current.playerField, "front").find(lane => lane === directlyAhead)
@@ -2800,7 +2813,8 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           current.selectedShield || current.movingShield || current.selectedSpecial ||
           current.pendingAttack || current.specialStrike || current.jokerExplosion) return current;
       const unit = current.playerField[index];
-      if (!unit || fieldRank(unit, index) !== "back" || (tutorialDuel && isTutorialSix(unit.card)) || tutorialRevenge) return current;
+      if (!unit || fieldRank(unit, index) !== "back" || (tutorialDuel && isTutorialSix(unit.card)) ||
+          (!tutorialGuided && isRanger(unit.card)) || tutorialRevenge) return current;
       const open = openLanes(current.playerField, "front");
       const directlyAhead = laneOf(unit, index) - slotsPerRank;
       const lane = tutorialGuided
@@ -2843,14 +2857,21 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     return (tutorialRevenge || movingReserveToCover) && moved !== current ? advancePlayerStep(moved, "attack") : moved;
   }
 
+  function moveDraggedUnit(current: Game, index: number, lane: number) {
+    if (tutorialDuel) return placeTutorialSix(current, index, lane);
+    const unit = current.playerField[index];
+    if (!tutorialGuided && unit && isRanger(unit.card) && fieldRank(unit, index) === "back" && rankLanes.front.includes(lane)) {
+      return canDeployThisPhase(current) ? promoteUnit(current, index, lane) : current;
+    }
+    return moveCoverCard(current, index, lane);
+  }
+
   function dropOnEmptyLane(lane: number) {
     const source = draggedCard.current;
     draggedCard.current = null;
     if (source?.from !== "field") return;
     if ((tutorialRevenge || movingReserveToCover) && lane !== tutorialCoverLane) return;
-    setGame(current => tutorialDuel
-      ? placeTutorialSix(current, source.index, lane)
-      : moveCoverCard(current, source.index, lane));
+    setGame(current => moveDraggedUnit(current, source.index, lane));
   }
 
   function moveTutorialSix(lane: number) {
@@ -3169,6 +3190,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       : "Press Stack to combine this card with a matching front-rank card.";
     if (canStackSelected && isMovingOut) return "Press Stack to combine this card with a matching card.";
     if (isMovingUp) {
+      if (!tutorialGuided && selectedBackRanger) return "Your Ranger stays in the back rank. Drag it forward if you want to move it up.";
       if (!hasBackRankCards(game.playerField)) {
         return `Back rank empty. Advancing to ${turnSteps[moveOutOrAttack(game)]}…`;
       }
@@ -3256,12 +3278,14 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
         else startShieldMove(unit.card, layer);
       } : undefined}
       onDoublePick={rank === "back" && isMovingUp ? promoteToOpenSlot : undefined}
+      allowRangerPromotion={rank === "back" && isMovingUp && !tutorialGuided && !paused && !warningActive && canDeployThisPhase(game)}
       onInspect={inspect}
       inspected={inspected}
       onPickEmpty={tutorialRevenge || movingReserveToCover
         ? rank === "front" && selected !== null && (movingReserveToCover || !revengeReady) ? moveTutorialCover : undefined
         : rank === "back" && placingTutorialSix && tutorialSixSelected ? moveTutorialSix
-        : rank === "front" && isMovingUp && selectedBack && !(tutorialDuel && tutorialSixSelected) ? moveSelectedUp : undefined}
+        : rank === "front" && isMovingUp && selectedBack && (tutorialGuided || !selectedBackRanger) &&
+          !(tutorialDuel && tutorialSixSelected) ? moveSelectedUp : undefined}
       canDrag={index => {
         const unit = game.playerField[index];
         return canStackFromHand ||
@@ -3271,7 +3295,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       onTouchRearrange={!paused && !warningActive && (canStackFromHand || placingTutorialSix ||
           ((movingReserveToCover || (tutorialRevenge && !revengeReady)) && rank === "front")) ? (index, lane) => {
         if ((tutorialRevenge || movingReserveToCover) && lane !== tutorialCoverLane) return;
-        setGame(current => tutorialDuel ? placeTutorialSix(current, index, lane) : moveCoverCard(current, index, lane));
+        setGame(current => moveDraggedUnit(current, index, lane));
       } : undefined}
       onDrag={index => { draggedCard.current = { from: "field", index }; }}
       onDragEnd={() => { draggedCard.current = null; }}
