@@ -11,8 +11,8 @@ const introduction = [
   { speaker: "locke", text: "Name’s Locke. Thief. I got caught, and now teaching you cards counts as community service. Apparently my other suggestion, stealing back the evidence, was a nonstarter." },
   { speaker: "garrison", text: "Commander Garrison. I was ordered to supervise. Believe me, I asked whether there was a siege I could attend instead." },
   { speaker: "locke", text: "Good news, Commander: your wish came true. The player’s castle is under attack. Leave the battlefield empty and the enemy can march right into the castle." },
-  { speaker: "garrison", text: "We each start by drawing five cards. Your opponent keeps their hand face down. Once you have yours, deploy the 4, then the 5, then the 6 to your back rank." },
-  { speaker: "locke", text: "Five cards, three soldiers, one extremely enthusiastic supervisor. Click the highlighted card each time and I’ll handle the counting." },
+  { speaker: "garrison", text: "We each start by drawing five cards. Your opponent keeps their hand face down. Once you’ve seen your hand, I’ll show you where to deploy your soldiers." },
+  { speaker: "locke", text: "Five cards and one extremely enthusiastic supervisor. Try to contain your excitement, Commander." },
   { speaker: "garrison", text: "The court will be delighted to hear it. Draw your opening five cards." },
 ] as const;
 
