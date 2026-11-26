@@ -1020,7 +1020,7 @@ function CardDetails({ card, layers }: { card: Card | null | undefined; layers: 
   );
 }
 
-function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick, canPick, onPickEmpty, canDrag, onDrag, onDragEnd, onDrop, onDropEmpty, onInspect, inspected, onDoublePick, highlighted = false, highlightRanged = false }: {
+function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick, canPick, onPickEmpty, canDrag, onDrag, onDragEnd, onDrop, onDropEmpty, onInspect, inspected, onDoublePick, highlighted = false, highlightRanged = false, moveGuide }: {
   onInspect?: (card: Card | null) => void;
   inspected?: Card | null;
   units: Field;
@@ -1038,6 +1038,7 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
   onDoublePick?: (index: number) => void;
   highlighted?: boolean;
   highlightRanged?: boolean;
+  moveGuide?: { from: number; to: number };
   canPick?: (unit: Unit, index: number) => boolean;
 }) {
   return (
@@ -1047,16 +1048,20 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
         {rankLanes[rank].map(lane => {
           const entries = laneCards(units, lane);
           if (!entries.length) {
+            const arrow = moveGuide?.to === lane ? (moveGuide.from < lane ? "→" : "←") : undefined;
+            const guide = arrow && <span className="cover-move-arrow" aria-hidden="true">{arrow}</span>;
             const dropProps = onDropEmpty ? {
               onDragOver: (event: React.DragEvent) => event.preventDefault(),
               onDrop: (event: React.DragEvent) => { event.preventDefault(); onDropEmpty(lane); },
             } : {};
             return (
               onPickEmpty ? (
-                <button key={lane} className="field-slot field-slot-open" {...dropProps} onClick={() => onPickEmpty(lane)}>
+                <button key={lane} className={`field-slot field-slot-open${arrow ? " cover-move-target" : ""}`} {...dropProps} onClick={() => onPickEmpty(lane)}>
+                  {guide}
                   Move Here
                 </button>
-              ) : <div key={lane} className="field-slot" {...dropProps} aria-label="Empty slot" />
+              ) : <div key={lane} className={`field-slot${arrow ? " cover-move-target" : ""}`} {...dropProps}
+                aria-label={arrow ? "Move the 4 here to cover the 6" : "Empty slot"}>{guide}</div>
             );
           }
 
@@ -2149,7 +2154,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
 
   function moveCoverCard(current: Game, index: number, lane: number) {
     const moved = rearrangeRank(current, index, lane);
-    return movingReserveToCover && moved !== current ? advancePlayerStep(moved, "attack") : moved;
+    return (tutorialRevenge || movingReserveToCover) && moved !== current ? advancePlayerStep(moved, "attack") : moved;
   }
 
   function dropOnEmptyLane(lane: number) {
@@ -2456,6 +2461,10 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   );
   const placingTutorialSix = tutorialDuel && isMovingUp && formationReady;
   const tutorialSixSelected = selectedUnit && isTutorialSix(selectedUnit.card);
+  const tutorialFourIndex = tutorialRevenge && !revengeReady
+    ? game.playerField.findIndex(unit => unit && isTutorialFour(unit.card)) : -1;
+  const tutorialFour = game.playerField[tutorialFourIndex];
+  const fourMoveGuide = tutorialFour ? { from: laneOf(tutorialFour, tutorialFourIndex), to: tutorialCoverLane } : undefined;
   const ownRows = (["front", "back"] as const).map(rank => (
     <BattlefieldRow
       key={rank}
@@ -2464,6 +2473,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       highlightRanged={rank === "back" && isAttacking && !skipAttack}
       rank={rank}
       label={rank === "front" ? "Your front rank" : "Your back rank"}
+      moveGuide={rank === "front" ? fourMoveGuide : undefined}
       selected={selected}
       onPick={!isComputer && !showingCombatEffect && !game.pendingAttack && !game.selectedSpecial ? pickUnit : undefined}
       canPick={canPickOwnUnit}
@@ -2511,7 +2521,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           onDone={() => {
             setSeenLessons(current => new Set([...current, activeLesson]));
             if (activeLesson === "free-shield") setGame(current => advancePlayerStep(current, "move-out"));
-            if (activeLesson === "break-queen-shield" || activeLesson === "take-out-three" || activeLesson === "press-the-advantage" || activeLesson === "hearts-break-shield") {
+            if (activeLesson === "triangle" || activeLesson === "break-queen-shield" || activeLesson === "take-out-three" || activeLesson === "press-the-advantage" || activeLesson === "hearts-break-shield") {
               setGame(current => advancePlayerStep(current, "attack"));
             }
           }} />

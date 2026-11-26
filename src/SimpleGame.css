@@ -1575,3 +1575,15 @@
 }
 
 .shield-target-options img { width: min(4rem, 20vw); }
+
+.field-slot.cover-move-target {
+  position: relative;
+  outline: 2px dashed #ffd47c;
+  outline-offset: -4px;
+}
+
+.cover-move-arrow {
+  display: block;
+  color: #ffd47c;
+  font: 900 clamp(1.5rem, 6vw, 3rem)/1 system-ui, sans-serif;
+}
