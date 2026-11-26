@@ -1076,16 +1076,16 @@ function finishPlayerAttack(game: Game): Game {
 }
 
 function startGame(tutorial = false): Game {
-  return drawForTurn({
+  const opening: Game = {
     ...dealSimpleGame(tutorial ? createTutorialDeck() : undefined),
     playerField: [],
     backRankAtTurnStart: [],
     computerField: [],
     discardPile: [],
     phase: "player",
-    step: "draw",
+    step: "move-out",
     round: { id: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`, at: Date.now() },
-    turn: 0,
+    turn: 1,
     drewCard: false,
     selected: null,
     result: "",
@@ -1093,7 +1093,8 @@ function startGame(tutorial = false): Game {
     selectedStack: null,
     selectedSpecial: null,
     movingStack: false,
-  }, "player");
+  };
+  return tutorial ? drawForTurn({ ...opening, turn: 0 }, "player") : opening;
 }
 
 function CardDetails({ card, layers }: { card: Card | null | undefined; layers: number }) {
@@ -2977,7 +2978,9 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     if (isMovingOut && tutorialRank) return tutorialRank === "5"
       ? "Locke: One down. Deploy the highlighted 5 before the Commander starts counting."
       : `Commander Garrison: Deploy the highlighted ${tutorialRank} to your back rank.`;
-    if (isMovingOut && game.turn <= 2) return "Play cards into the back rank, then press END TURN.";
+    if (isMovingOut && game.turn <= 2) return tutorial
+      ? "Play cards into the back rank, then press END TURN."
+      : "You go first and skip the opening draw. Play cards into the back rank, then press END TURN.";
     if (offenseRestricted) return "Move, deploy, or equip shields, then end your turn. You can also retreat a card.";
     if (isMovingOut) return "Play cards from your hand into the back rank.";
     if (castleTargeting) return "Castle exposed. Choose one of the computer’s face-down hand cards.";
@@ -3351,7 +3354,9 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       <div className="turn-steps" aria-label="Turn phases">
         {(game.turn <= 2 ? (["draw", "move-out"] as const)
           : (["draw", "move-up", "move-out", "attack"] as const))
-          .filter(step => step !== "draw" || game.drawPile.length > 0 || game.step === "draw")
+          .filter(step => step !== "draw" || (
+            (tutorial || game.turn !== 1) && (game.drawPile.length > 0 || game.step === "draw")
+          ))
           .filter(step => step !== "attack" || (!skipAttack && !offenseRestricted))
           .map(step => (
           <span key={step} aria-current={game.step === step ? "step" : undefined}>{turnSteps[step]}</span>
