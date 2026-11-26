@@ -6,12 +6,12 @@ import { sandboxRetreatPlan, saveMatch } from "./playtest";
 import { useCardMotion } from "./useCardMotion";
 import { useAudioForeground, useGameSound, type GameSound } from "./useGameSound";
 import "./SimpleGame.css";
-import { createStandardDeck, createTutorialDeck, dealSimpleGame, ranks, shuffleDeck, tutorialDeploymentRanks } from "./game_engine/deck";
+import { createFullDeck, createTutorialDeck, dealSimpleGame, ranks, shuffleDeck, tutorialDeploymentRanks } from "./game_engine/deck";
 import type { Card, Suit } from "./game_engine/types";
 
 export const simpleVersionTitle = "Brad's Card Game";
 
-const labCards: Card[] = [...createStandardDeck(), { type: "joker", color: "red" }, { type: "joker", color: "black" }];
+const labCards = createFullDeck();
 const labZones = {
   player: "Your hand", computer: "Opponent hand", playerField: "Your battlefield", computerField: "Opponent battlefield",
 } as const;
@@ -19,6 +19,10 @@ type LabZone = keyof typeof labZones;
 
 function labCardName(card: Card) {
   return card.type === "joker" ? `${card.color} Joker` : `${card.rank} of ${card.suit}`;
+}
+
+function cardKey(card: Card) {
+  return card.type === "joker" ? `joker-${card.color}-${card.copy ?? 1}` : `${card.rank}-${card.suit}`;
 }
 
 const slotsPerRank = 3;
@@ -96,8 +100,10 @@ type Game = ReturnType<typeof dealSimpleGame> & {
   movingStack: boolean;
   immunityWarningTarget?: number;
   immunityWarningShield?: number;
-  pendingAttack?: { attacker: number; target: number; isStack: boolean; choices?: number[][]; victims?: number[]; choosingShield?: true; shieldIndex?: number };
+  pendingAttack?: { attacker: number; target: number; isStack: boolean; choices?: number[][]; victims?: number[]; choosingShield?: true; shieldIndex?: number; convert?: boolean };
   selectedSpecial: Card | null;
+  convertSelected?: boolean;
+  noAttackTurn?: Partial<Record<Side, number>>;
   sound?: { cue: GameSound; lightning?: boolean };
   specialStrike?: { card: Card; target: Card; attachments: Card[]; kind: "ace" | "king"; side: Side; blocked: boolean; turn: number };
   advantage?: boolean;
@@ -304,8 +310,16 @@ function canAttackFrom(attacker: Unit, from: number, field: Field, castleCards: 
     (castleCards > 0 && !field.some(Boolean) && isNumber(attacker.card) && fieldRank(attacker, from) === "front");
 }
 
+function attackRestricted(game: Game, side: Side = "player") {
+  return game.noAttackTurn?.[side] === game.turn;
+}
+
+function isHolyKnight(card: Card) {
+  return card.type === "standard" && card.rank === "7";
+}
+
 function castleAttackerIndex(game: Game) {
-  if (game.phase !== "player" || game.turn <= 2 || game.step === "draw" ||
+  if (game.phase !== "player" || game.turn <= 2 || game.step === "draw" || attackRestricted(game) ||
       game.pendingAttack || game.movingStack || game.immunityWarningTarget !== undefined ||
       game.attackAnimation || game.specialStrike || game.jokerExplosion || game.deckWarning !== undefined ||
       !game.computer.length || game.computerField.some(Boolean)) return -1;
@@ -336,13 +350,13 @@ function hasMoveOutAction(game: Game) {
 }
 
 function moveOutOrAttack(game: Game): TurnStep {
-  return hasMoveOutAction(game) ? "move-out" : "attack";
+  return hasMoveOutAction(game) || attackRestricted(game) ? "move-out" : "attack";
 }
 
 function nextPlayerStep(game: Game): TurnStep | null {
   if (game.turn <= 2) return null;
   if (game.step === "move-up") return moveOutOrAttack(game);
-  if (game.step === "move-out") return "attack";
+  if (game.step === "move-out" && !attackRestricted(game)) return "attack";
   return null;
 }
 
@@ -497,7 +511,7 @@ function chooseComputerSpecial(game: Game, hasRegularAttack: boolean, allowBlind
 function resolveSpecial(game: Game, targetIndex: number, side: Side = "player", special = game.selectedSpecial): Game {
   const targetField = side === "player" ? "computerField" : "playerField";
   const target = game[targetField][targetIndex];
-  if (game.phase !== side || special?.type !== "standard" || !isSpecial(special) || !target ||
+  if (game.phase !== side || attackRestricted(game, side) || special?.type !== "standard" || !isSpecial(special) || !target ||
       !game[side].includes(special)) return game;
 
   const lane = laneCards(game[targetField], laneOf(target, targetIndex));
@@ -741,6 +755,24 @@ function chooseComputerAttack(game: Game, difficulty: Difficulty, roll: number, 
   return { attack, hasProductiveAttack: options.some(option => option.tacticalScore >= 4) };
 }
 
+function shouldComputerConvert(game: Game, difficulty: Difficulty, attacker: number, target: number, roll: number) {
+  if (difficulty !== "Normal" && difficulty !== "Hard") return false;
+  const knight = game.computerField[attacker];
+  const defender = game.playerField[target];
+  if (!knight || !isHolyKnight(knight.card) || !defender?.revealed || !isNumber(defender.card)) return false;
+  const defense = attackDefense(game.playerField, target, defender);
+  if (defense.outer || defense.entries.some(({ unit }) => unit.revealed && hasFourShield(unit))) return false;
+  if (defense.entries.some(({ unit }) => !unit.revealed)) return false;
+  const attack = calculateAttack(game.computerField, attacker, defense.card);
+  const value = strength(defender.card);
+  if (attack.immune || attack.power < value) return false;
+  if (difficulty === "Normal") return value >= 5 && roll < 0.35;
+  // Giving up next turn's offense is costly when the opponent still has strong attackers.
+  const enemyThreat = game.playerField.some(unit => unit?.revealed && unit !== defender &&
+    (isNumber(unit.card) && strength(unit.card) >= 8));
+  return value >= 7 || (value === 6 && !enemyThreat && game.computerField.filter(Boolean).length >= 3);
+}
+
 function chooseComputerRetreat(game: Game) {
   const field = game.computerField;
   const visibleEnemies = game.playerField.map(unit => unit?.revealed ? unit : null);
@@ -828,15 +860,18 @@ function stackVictimChoices(attackers: Field, attacker: number, defenders: Field
   return most ? plans.filter(plan => plan.victims.length === most).map(plan => plan.victims) : [];
 }
 
-function resolveAttack(game: Game, side: Side, attackerIndex: number, targetIndex: number, chosenVictims?: number[], chosenShield?: number): Game {
+function resolveAttack(game: Game, side: Side, attackerIndex: number, targetIndex: number, chosenVictims?: number[], chosenShield?: number, convert = false): Game {
   const attackerField = side === "player" ? "playerField" : "computerField";
   const defenderField = side === "player" ? "computerField" : "playerField";
   const attacker = game[attackerField][attackerIndex];
-  if (game.phase !== side || !attacker || !canAttackTarget(attacker, attackerIndex, game[defenderField], targetIndex)) {
+  if (game.phase !== side || attackRestricted(game, side) ||
+      !attacker || (convert && !isHolyKnight(attacker.card)) ||
+      !canAttackTarget(attacker, attackerIndex, game[defenderField], targetIndex)) {
     return game;
   }
 
-  const victims = chosenVictims ?? stackVictimChoices(game[attackerField], attackerIndex, game[defenderField], targetIndex)[0];
+  const victims = convert ? undefined
+    : chosenVictims ?? stackVictimChoices(game[attackerField], attackerIndex, game[defenderField], targetIndex)[0];
   targetIndex = victims?.[0] ?? targetIndex;
   const defender = game[defenderField][targetIndex]!;
   const blast = defender.card.type === "joker";
@@ -872,7 +907,11 @@ function resolveAttack(game: Game, side: Side, attackerIndex: number, targetInde
   if (shieldHit) discarded.push(shieldHit.card);
   if (blast) discarded.push(...(defender.shields ?? []).map(layer => layer.card));
   const defeatedSlots = new Set(defeated ? victims ?? [targetIndex] : []);
-  for (const index of defeatedSlots) discarded.push(game[defenderField][index]!.card);
+  const recruited = convert && defeated && !blast ? defender.card : undefined;
+  for (const index of defeatedSlots) {
+    const card = game[defenderField][index]!.card;
+    if (card !== recruited) discarded.push(card);
+  }
 
   const attacking = game[attackerField].map((unit, index) =>
     unit && laneOf(unit, index) === laneOf(attacker, attackerIndex)
@@ -892,6 +931,9 @@ function resolveAttack(game: Game, side: Side, attackerIndex: number, targetInde
   return {
     ...game,
     [attackerField]: attacking,
+    [side]: recruited ? [...game[side], recruited] : game[side],
+    convertSelected: undefined,
+    noAttackTurn: convert ? { ...game.noAttackTurn, [side]: game.turn + 2 } : game.noAttackTurn,
     [defenderField]: defending,
     discardPile: discarded.length ? [...game.discardPile, ...discarded] : game.discardPile,
     selected: null,
@@ -907,7 +949,10 @@ function resolveAttack(game: Game, side: Side, attackerIndex: number, targetInde
         : { from: attacker.card.suit, to: defendedCard.suit, label: "A 2 blocks a 10" }
       : undefined,
     sound: { cue: blast ? "blast" : immune ? "immunity" : (shieldHit || fourShieldHit) ? "shield-break" : defeated ? "hit" : "block" },
-    result: survivesBlast ? "Joker trap! The 5 survived. The Joker and any decoy shields went to the discard pile."
+    result: recruited ? side === "player"
+      ? `Convert! ${labCardName(recruited)} joined your hand. You cannot attack next turn.`
+      : `Convert! The computer recruited ${labCardName(recruited)} and cannot attack next turn.`
+      : survivesBlast ? "Joker trap! The 5 survived. The Joker and any decoy shields went to the discard pile."
       : blast ? "Joker trap! The attacking lane, Joker, and their attached shields went to the discard pile."
       : fourShieldHit ? "The built-in shield broke. The 4 stayed in play."
       : shieldHit ? `The shield broke at power ${strength(defendedCard)}. The protected cards stayed in play.`
@@ -1083,6 +1128,7 @@ function CardDetails({ card, layers }: { card: Card | null | undefined; layers: 
       case "4": abilities.push("Built-in shield: absorbs the first non-immune regular hit."); break;
       case "5": abilities.push("Joker immunity: survives a Joker trap without losing its shields."); break;
       case "6": abilities.push("Range: 2. Attack the enemy front rank from your back rank, or reach the enemy back rank from your front rank past occupied slots."); break;
+      case "7": abilities.push("Convert: win a normal attack to recruit the defender into your hand. Using Convert locks offensive actions on your next turn."); break;
       case "10": abilities.push("A 2 is immune to this card and can defeat it."); break;
     }
     const favored = suitAdvantage[card.suit];
@@ -1304,7 +1350,7 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
                   );
                   return (
                     <div
-                      key={unit.card.type === "joker" ? unit.card.color : `${unit.card.rank}-${unit.card.suit}`}
+                      key={cardKey(unit.card)}
                       className={`simple-game-stack-card${horizontalFour ? " is-horizontal" : ""}${separateShields ? " has-separate-shields" : ""}`}
                       data-card-position={`${opponent ? "computerField" : "playerField"}-${index}`}
                       onDragOver={onDrop ? event => event.preventDefault() : undefined}
@@ -1507,7 +1553,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const isJokerLessonTarget = replacementJoker ? isTutorialEnemyRanger : isTutorialEnemyFive;
   const tutorialGuided = tutorialDuel || tutorialRevenge || tutorialDeployHalfling || tutorialSlayDragon || tutorialReserveAttack || tutorialFollowup || tutorialImmunity || movingReserveToCover || tutorialReinforce || tutorialNines || tutorialStatsAttack || tutorialBlind || tutorialDouble || tutorialJoker;
   const availableLesson = tutorial && game.turn === 2 && game.phase === "computer" ? "enemy-opening"
-    : tutorial && game.turn === 34 && game.phase === "computer" && game.deckWarning === undefined &&
+    : tutorial && game.turn === 36 && game.phase === "computer" && game.deckWarning === undefined &&
         !game.attackAnimation ? "ten-cards-left"
     : tutorial && game.turn === 38 && game.phase === "computer" && !game.attackAnimation &&
         game.deckWarning === undefined ? "on-your-own"
@@ -1550,7 +1596,14 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     : game.tutorialCombatReaction
       ? game.deckWarning === undefined ? game.tutorialCombatReaction : undefined
       : nextLesson && !seenLessons.has(nextLesson) ? nextLesson : undefined;
-  const paused = pauseRequested || utilityOpen || !!activeLesson;
+  const [convertTarget, setConvertTarget] = useState<number | null>(null);
+  const convertDialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = convertDialog.current;
+    if (convertTarget !== null && dialog && !dialog.open) dialog.showModal();
+    if (convertTarget === null && dialog?.open) dialog.close();
+  }, [convertTarget]);
+  const paused = pauseRequested || utilityOpen || !!activeLesson || convertTarget !== null;
   const healthStats = useRef<HTMLDListElement>(null);
   useEffect(() => {
     if (activeLesson !== "health-stats") return;
@@ -1791,11 +1844,14 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const isAttacking = !isComputer && game.turn > 2 && game.step === "attack";
   const opponentHasCards = game.computerField.some(Boolean);
   const selectedUnit = game.selected === null ? null : game.playerField[game.selected];
-  const canAttackNow = !warningActive && game.turn > 2 && (opponentHasCards || game.computer.length > 0);
+  const offenseRestricted = !isComputer && attackRestricted(game);
+  const canAttackNow = !offenseRestricted && !warningActive && game.turn > 2 && (opponentHasCards || game.computer.length > 0);
   const selectedAttacker = selectedUnit && game.selected !== null && canAttackNow &&
     canAttackFrom(selectedUnit, game.selected, game.computerField, game.computer.length);
   const aimingAttack = selectedAttacker && !game.movingStack;
   const selectedBack = !!selectedUnit && game.selected !== null && fieldRank(selectedUnit, game.selected) === "back";
+  const canChooseConvert = !tutorialGuided && !paused && !game.pendingAttack && !showingCombatEffect &&
+    !game.movingStack && !!selectedAttacker && !!selectedUnit && isHolyKnight(selectedUnit.card) && opponentHasCards;
   const castleTargeting = !paused && !tutorialGuided && castleAttackerIndex(game) >= 0;
   const choosingHandCard = game.selectedShield || game.selectedStack || game.selectedSpecial;
   const canReallocateShields = !tutorialGuided && !tutorialOpening && !isComputer && !showingCombatEffect && !game.pendingAttack && !warningActive;
@@ -1817,9 +1873,9 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   }
 
   const canChooseShield = canUseSupport && game.playerField.some(canShield);
-  const canSpy = canUseSupport && opponentHasCards;
+  const canSpy = !offenseRestricted && canUseSupport && opponentHasCards;
   const spySelected = canSpy && !!game.selectedShield && isJack(game.selectedShield);
-  const canDoubleAttack = (canUseSupport || (tutorialDouble && tutorialDragonShielded && !tutorialDoubleReady)) && !warningActive && game.turn > 2 && game.queenAttackTurn !== game.turn;
+  const canDoubleAttack = !offenseRestricted && (canUseSupport || (tutorialDouble && tutorialDragonShielded && !tutorialDoubleReady)) && !warningActive && game.turn > 2 && game.queenAttackTurn !== game.turn;
   const doubleAttackSelected = canDoubleAttack && !!game.selectedShield && isQueen(game.selectedShield);
   const queenCue = !isComputer && game.queenAttackTurn === game.turn
     ? game.extraAttack ? "Double Attack!" : "2nd Attack!"
@@ -1875,8 +1931,8 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const moveOutExhausted = !canStackSelected && game.turn > 2 && isMovingOut && !aimingAttack && !game.selectedStack && !game.selectedSpecial && !hasMoveOutAction(game);
   const moveUpBlocked = !canStackSelected && isMovingUp && !aimingAttack && !game.selectedStack && !game.selectedSpecial && !canMoveUp(game.playerField);
   const openingBackFilled = game.turn === 1 && isMovingOut && !hasOpenLane;
-  const jokerOnlyTurn = canEndTurn && !showingCombatEffect && hasOnlyJoker(game);
-  const skipAttack = canEndTurn && !showingCombatEffect && hasNoAttackOptions(game);
+  const jokerOnlyTurn = !offenseRestricted && canEndTurn && !showingCombatEffect && hasOnlyJoker(game);
+  const skipAttack = !offenseRestricted && canEndTurn && !showingCombatEffect && hasNoAttackOptions(game);
 
   function isTutorialStackTarget(unit: Unit, index: number, field = game.computerField) {
     const lane = laneCards(field, laneOf(unit, index));
@@ -2228,7 +2284,9 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           }, "player");
         }
         const attackDifficulty = current.computerStacked ? "Hard" : difficulty;
-        const { attack, hasProductiveAttack } = chooseComputerAttack(current, attackDifficulty, attackRoll, difficulty === "Hard");
+        const recoveryTurn = attackRestricted(current, "computer");
+        const { attack, hasProductiveAttack } = recoveryTurn ? { attack: undefined, hasProductiveAttack: false }
+          : chooseComputerAttack(current, attackDifficulty, attackRoll, difficulty === "Hard");
         const { attacker, target } = attack ?? { attacker: -1, target: -1 };
         const attackingUnit = current.computerField[attacker];
         if (target === -1 && attackingUnit && current.player.length) {
@@ -2248,10 +2306,10 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           }, "player");
         }
         const turn: Game = { ...current, phase: "computer", result: "", advantage: false, immunity: undefined };
-        const special = !hasProductiveAttack && (!attack || difficulty !== "Easy")
+        const special = !recoveryTurn && !hasProductiveAttack && (!attack || difficulty !== "Easy")
           ? chooseComputerSpecial(turn, Boolean(attack), difficulty !== "Hard")
           : undefined;
-        if (difficulty === "Hard" && !attack && !special) {
+        if (recoveryTurn || (difficulty === "Hard" && !attack && !special)) {
           const slot = chooseComputerRetreat(turn);
           const unit = turn.computerField[slot];
           if (unit) {
@@ -2263,11 +2321,14 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
               sound: { cue: "play" },
             }, "player");
           }
-          return drawForTurn({ ...turn, phase: "player", result: "The computer found no effective attack and ended its turn." }, "player");
+          return drawForTurn({ ...turn, phase: "player",
+            result: recoveryTurn ? "The computer ended its Convert recovery turn."
+              : "The computer found no effective attack and ended its turn." }, "player");
         }
         const resolved = special
           ? resolveSpecial(turn, special.index, "computer", special.card)
-          : resolveAttack(turn, "computer", attacker, target);
+          : resolveAttack(turn, "computer", attacker, target, undefined, undefined,
+              shouldComputerConvert(turn, difficulty, attacker, target, attackRoll));
         return drawForTurn({ ...resolved, phase: "player" }, "player");
       });
     }, game.turn <= 2 ? 2500 : game.phase === "computer-attack" ? 1800 : 1600);
@@ -2309,7 +2370,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   function spy() {
     setGame(current => {
       const jack = current.selectedShield;
-      if (!jack || !isJack(jack) || current.phase !== "player" || current.step === "draw" ||
+      if (attackRestricted(current) || !jack || !isJack(jack) || current.phase !== "player" || current.step === "draw" ||
           current.pendingAttack || current.specialStrike || current.jokerExplosion ||
           !current.player.includes(jack) || !current.computerField.some(Boolean)) return current;
 
@@ -2341,7 +2402,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   function activateDoubleAttack() {
     setGame(current => {
       const queen = current.selectedShield;
-      if (!queen || !isQueen(queen) || current.phase !== "player" || current.step === "draw" || current.turn <= 2 ||
+      if (attackRestricted(current) || !queen || !isQueen(queen) || current.phase !== "player" || current.step === "draw" || current.turn <= 2 ||
           current.queenAttackTurn === current.turn || current.pendingAttack || current.specialStrike ||
           current.jokerExplosion || current.attackAnimation || current.deckWarning !== undefined ||
           !current.player.includes(queen)) return current;
@@ -2369,7 +2430,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   function selectFromHand(card: Card, kind: "selectedStack" | "selectedSpecial") {
     setGame(current => {
       const canChoose = current.phase === "player" && !current.pendingAttack && !current.specialStrike &&
-        (kind === "selectedStack" || (current.turn > 2 && current.computerField.some(Boolean)));
+        (kind === "selectedStack" || (!attackRestricted(current) && current.turn > 2 && current.computerField.some(Boolean)));
       if (!canChoose || !current.player.includes(card) ||
           (kind === "selectedStack" && !hasHandStack(current.playerField, card))) return current;
       return {
@@ -2424,6 +2485,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       const unit = current.playerField[index];
       if (!unit || current.phase !== "player" || current.pendingAttack || current.specialStrike) return current;
 
+      if (current.convertSelected) current = { ...current, convertSelected: undefined };
       if ((tutorialBlind || tutorialDouble || tutorialJoker) && !canPickOwnUnit(unit, index)) return current;
       if (promoteTutorialJoker) {
         const destination = openLanes(current.playerField, "front")[0];
@@ -2497,7 +2559,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
         }
       }
 
-      const canAttack = canAttackFrom(unit, index, current.computerField, current.computer.length);
+      const canAttack = !attackRestricted(current) && canAttackFrom(unit, index, current.computerField, current.computer.length);
       if (current.turn > 2 && canAttack && current.step !== "attack" &&
           !shield && !current.selectedStack && !current.selectedSpecial && !current.movingStack) {
         return { ...current, selected: current.selected === index ? null : index };
@@ -2623,15 +2685,22 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     setGame(current => ({ ...current, immunityWarningTarget: undefined, immunityWarningShield: undefined }));
   }
 
-  function attack(index: number, confirmed = false, chosenShield?: number) {
-    setGame(state => {
+  function attack(index: number, confirmed = false, chosenShield?: number, mode?: "regular" | "convert") {
+    if (!confirmed && chosenShield === undefined && mode === undefined && canChooseConvert &&
+        selectedUnit && selected !== null && canAttackTarget(selectedUnit, selected, game.computerField, index)) {
+      setConvertTarget(index);
+      return;
+    }
+
+    setGame(previous => {
+      const state = mode === undefined ? previous : { ...previous, convertSelected: mode === "convert" };
       if (confirmed ? state.immunityWarningTarget !== index : state.immunityWarningTarget !== undefined) return state;
       const choosing = state.pendingAttack?.choosingShield && state.pendingAttack.target === index;
       if (chosenShield !== undefined && !choosing) return state;
       const shieldIndex = confirmed ? state.immunityWarningShield : chosenShield;
       const current = confirmed ? { ...state, immunityWarningTarget: undefined, immunityWarningShield: undefined }
         : choosing && chosenShield !== undefined ? { ...state, pendingAttack: undefined } : state;
-      if (current.phase !== "player" || current.turn <= 2 || current.pendingAttack) return current;
+      if (current.phase !== "player" || current.turn <= 2 || current.pendingAttack || attackRestricted(current)) return current;
       const defender = current.computerField[index];
       if (!defender) return current;
       if (tutorial && current.turn === 3 && (current.step !== "attack" || index !== tutorialTarget ||
@@ -2718,7 +2787,8 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       if (!attacker || !canAttackTarget(attacker, attackerIndex, current.computerField, index)) return current;
       const earlyAttack = current.step !== "attack";
 
-      const choices = stackVictimChoices(current.playerField, attackerIndex, current.computerField, index);
+      const convert = current.convertSelected === true && isHolyKnight(attacker.card);
+      const choices = convert ? [] : stackVictimChoices(current.playerField, attackerIndex, current.computerField, index);
       const defense = attackDefense(current.computerField, index, defender, shieldIndex);
       if (shieldIndex !== undefined && !defense.outer) return state;
       if (shieldIndex === undefined && defense.layers.length > 1) {
@@ -2738,6 +2808,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             choices: choices.length > 1 ? choices : undefined,
             victims: choices.length === 1 ? choices[0] : undefined,
             shieldIndex,
+            convert,
           },
           computerField: current.computerField.map((unit, slot) =>
             unit && laneOf(unit, slot) === laneOf(defender, index) ? { ...unit, revealed: true } : unit,
@@ -2747,7 +2818,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           result: "",
         };
       }
-      const attacked = resolveAttack(current, "player", attackerIndex, index, undefined, shieldIndex);
+      const attacked = resolveAttack(current, "player", attackerIndex, index, undefined, shieldIndex, convert);
       return attacked.phase === "computer" ? finishPlayerAttack(attacked) : attacked;
     });
   }
@@ -2759,7 +2830,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     const timer = window.setTimeout(() => {
       setGame(current => {
         if (current.pendingAttack !== pending || current.phase !== "player") return current;
-        const attacked = resolveAttack(current, "player", pending.attacker, pending.target, pending.victims, pending.shieldIndex);
+        const attacked = resolveAttack(current, "player", pending.attacker, pending.target, pending.victims, pending.shieldIndex, pending.convert);
         return attacked === current ? current : finishPlayerAttack(attacked);
       });
     }, pending.isStack ? 1000 : 260);
@@ -2867,6 +2938,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     if (tutorialDuel && isAttacking) return aimingAttack
       ? "Locke: Attack the unshielded middle card in the enemy back rank."
       : "Commander Garrison: Select your 5 of Spades in the front rank.";
+    if (canChooseConvert) return "Choose a target for the Holy Knight to use Regular Attack or Convert.";
     if (aimingAttack) return castleTargeting
       ? "Castle exposed. Choose one of the computer’s face-down hand cards."
       : game.extraAttack ? "Choose an opposing card for the first of two attacks."
@@ -2906,6 +2978,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       ? "Locke: One down. Deploy the highlighted 5 before the Commander starts counting."
       : `Commander Garrison: Deploy the highlighted ${tutorialRank} to your back rank.`;
     if (isMovingOut && game.turn <= 2) return "Play cards into the back rank, then press END TURN.";
+    if (offenseRestricted) return "Move, deploy, or equip shields, then end your turn. You can also retreat a card.";
     if (isMovingOut) return "Play cards from your hand into the back rank.";
     if (castleTargeting) return "Castle exposed. Choose one of the computer’s face-down hand cards.";
     if (selected !== null) return selectedAttacker
@@ -3005,7 +3078,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     if (tutorialGuided) return false;
     if (tutorialOpening) return canDeployFromHand && card === tutorialDeployment;
     if (isShield(card)) return canChooseShield || (isJack(card) && canSpy) || (isQueen(card) && canDoubleAttack);
-    if (isSpecial(card)) return !isComputer && !warningActive && game.turn > 2 && opponentHasCards && !game.pendingAttack && !showingCombatEffect;
+    if (isSpecial(card)) return !offenseRestricted && !isComputer && !warningActive && game.turn > 2 && opponentHasCards && !game.pendingAttack && !showingCombatEffect;
     return (canDeployFromHand && canDeploy(card)) || (canStackFromHand && hasStackTarget(card));
   }
 
@@ -3047,7 +3120,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             </select></label>
           )}
           <label>Card<select value={labCard} onChange={event => setLabCard(Number(event.currentTarget.value))}>
-            {labCards.map((card, index) => <option key={index} value={index}>{labCardName(card)}</option>)}
+            {labCards.map((card, index) => <option key={index} value={index}>{labCardName(card)}{card.type === "joker" && card.copy ? " (second copy)" : ""}</option>)}
           </select></label>
           <button type="button" onClick={() => editLab()}>Add card</button>
           <details><summary>Remove a card from this location</summary>
@@ -3102,6 +3175,25 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
               {victims.map(index => <CardFace key={index} card={game.computerField[index]?.card} />)}
             </button>
           ))}
+        </div>
+      </dialog>
+      <dialog ref={convertDialog} className="game-mode-picker" aria-labelledby="holy-knight-title"
+        aria-describedby="holy-knight-description" onCancel={event => {
+          event.preventDefault();
+          setConvertTarget(null);
+        }}>
+        <h2 id="holy-knight-title">Holy Knight</h2>
+        <p id="holy-knight-description">Win with Convert to send the target to your hand. Using Convert skips your next turn’s offensive actions.</p>
+        <div className="game-mode-options">
+          <button autoFocus onClick={() => {
+            if (convertTarget !== null) attack(convertTarget, false, undefined, "regular");
+            setConvertTarget(null);
+          }}>Regular Attack</button>
+          <button onClick={() => {
+            if (convertTarget !== null) attack(convertTarget, false, undefined, "convert");
+            setConvertTarget(null);
+          }}>Convert</button>
+          <button onClick={() => setConvertTarget(null)}>Cancel</button>
         </div>
       </dialog>
       <dialog ref={immunityDialog} className="game-mode-picker" aria-labelledby="immunity-warning-title"
@@ -3260,7 +3352,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
         {(game.turn <= 2 ? (["draw", "move-out"] as const)
           : (["draw", "move-up", "move-out", "attack"] as const))
           .filter(step => step !== "draw" || game.drawPile.length > 0 || game.step === "draw")
-          .filter(step => step !== "attack" || !skipAttack)
+          .filter(step => step !== "attack" || (!skipAttack && !offenseRestricted))
           .map(step => (
           <span key={step} aria-current={game.step === step ? "step" : undefined}>{turnSteps[step]}</span>
         ))}
@@ -3425,6 +3517,9 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             <span>TURN {Math.ceil(game.turn / 2)} · {isComputer ? "ENEMY" : "PLAYER"} — {skipAttack ? "ENDING TURN" : turnSteps[game.step].toUpperCase()}</span>
           </div>
           {ownRows}
+          {offenseRestricted && (
+            <p className="convert-status" role="status">Convert recovery turn · You can move, deploy, shield, or retreat.</p>
+          )}
           <div className="turn-controls" role="group" aria-label="Turn controls">
             {!isComputer && nextStep && (
               <button className="simple-game-next-step" onClick={advanceStep}>
@@ -3534,7 +3629,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       <div className="hand-row player-hand-row" style={compactBoard ? undefined : handLayout}>
         {game.player.map((card, index) => (
           <button
-            key={card.type === "joker" ? card.color : `${card.rank}-${card.suit}`}
+            key={cardKey(card)}
             data-card-position={`player-${index}`}
             disabled={(tutorialOpening || tutorialGuided) && !canUseHandCard(card)}
             draggable={canDragHandCard(card)}

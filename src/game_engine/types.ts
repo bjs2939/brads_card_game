@@ -37,6 +37,7 @@ export type Card =
   | {
       type: "joker";
       color: JokerColor;
+      copy?: 2;
     };
 
 // player definitions

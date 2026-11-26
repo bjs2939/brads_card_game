@@ -18,14 +18,19 @@ export function shuffleDeck<T>(deck: T[]): T[] {
   return shuffled;
 }
 
-function createFullDeck(): Card[] {
-  return [...createStandardDeck(), { type: "joker", color: "red" }, { type: "joker", color: "black" }];
+function extraJokers(): Card[] {
+  return [{ type: "joker", color: "red", copy: 2 }, { type: "joker", color: "black", copy: 2 }];
+}
+
+export function createFullDeck(): Card[] {
+  return [...createStandardDeck(), { type: "joker", color: "red" }, { type: "joker", color: "black" }, ...extraJokers()];
 }
 
 export const tutorialDeploymentRanks = ["4", "5", "6"] as const;
 
 export function createTutorialDeck(): Card[] {
-  const cards = createFullDeck();
+  // Keep the original scripted draw order and add the bonus Jokers after the lesson draws.
+  const cards = createFullDeck().filter(card => card.type !== "joker" || !card.copy);
   const opening: [Rank, Suit][] = [
     ["4", "hearts"], ["3", "clubs"],
     ["5", "spades"], ["4", "spades"],
@@ -47,7 +52,7 @@ export function createTutorialDeck(): Card[] {
   [deck[45], deck[ranger]] = [deck[ranger], deck[45]];
   const joker = deck.findIndex(card => card.type === "joker" && card.color === "black");
   [deck[46], deck[joker]] = [deck[joker], deck[46]];
-  return deck;
+  return [...deck, ...extraJokers()];
 }
 
 export function dealSimpleGame(deck = shuffleDeck(createFullDeck())) {
