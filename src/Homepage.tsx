@@ -20,10 +20,32 @@ export default function HomePage() {
   const [showIntro, setShowIntro] = useState(false);
   const [chooseDifficulty, setChooseDifficulty] = useState(false);
   const [showingResult, setShowingResult] = useState(false);
+  const tutorialAudio = useRef<AudioContext | null>(null);
   const modePicker = useRef<HTMLDialogElement>(null);
   const music = useBackgroundMusic(!difficulty ? "menu" : showingResult ? null : "battle");
 
+  function stopTutorialAudio() {
+    const audio = tutorialAudio.current;
+    tutorialAudio.current = null;
+    if (audio) void audio.close().catch(() => {});
+  }
+
+  function openTutorial() {
+    modePicker.current?.close();
+    try {
+      if (window.AudioContext && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        const audio = new AudioContext();
+        tutorialAudio.current = audio;
+        void audio.resume().catch(() => {});
+      }
+    } catch {
+      // The dialogue can still be read when audio is unavailable.
+    }
+    setShowIntro(true);
+  }
+
   function goHome() {
+    stopTutorialAudio();
     setShowingResult(false);
     setTrainingGrounds(false);
     setTutorial(false);
@@ -32,6 +54,7 @@ export default function HomePage() {
   }
 
   function launchMatch(level: Difficulty, training = false, tutorialMatch = false) {
+    stopTutorialAudio();
     modePicker.current?.close();
     music.start("battle");
     setTrainingGrounds(training);
@@ -41,7 +64,7 @@ export default function HomePage() {
   }
 
   if (showIntro) {
-    return <TutorialIntro onDeal={() => launchMatch("Easy", false, true)} onExit={goHome} />;
+    return <TutorialIntro audio={tutorialAudio.current} onDeal={() => launchMatch("Easy", false, true)} onExit={goHome} />;
   }
 
   if (difficulty) {
@@ -87,7 +110,7 @@ export default function HomePage() {
           )) : (
             <>
               <button disabled>Campaign <small>Coming soon</small></button>
-              <button type="button" onClick={() => { modePicker.current?.close(); setShowIntro(true); }}>Tutorial</button>
+              <button type="button" onClick={openTutorial}>Tutorial</button>
               <button className="game-home-primary" onClick={() => setChooseDifficulty(true)}>VS Computer</button>
               <button disabled>Online Matchmaking <small>Coming soon</small></button>
               <button disabled>VS Friend <small>Coming soon</small></button>

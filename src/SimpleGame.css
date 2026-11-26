@@ -1525,3 +1525,11 @@
   .touch-stack-hint { margin: 0.25rem; font: 0.8rem/1.25 system-ui, sans-serif; }
   .simple-game-table > .simple-game-status { width: auto; margin-inline: 0; }
 }
+
+.player-hand-row > button.tutorial-deploy-card {
+  outline: 3px solid #ffd47c;
+  outline-offset: 3px;
+  box-shadow: 0 0 1rem #ffc662a6;
+}
+
+.player-hand-row > button:disabled { opacity: 0.55; }

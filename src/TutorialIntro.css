@@ -63,15 +63,12 @@
   width: clamp(5.5rem, 25vw, 9rem);
   height: clamp(5.5rem, 25vw, 9rem);
   overflow: hidden;
-  border: 1px solid #627480;
-  border-radius: 0.65rem 0.65rem 0 0;
-  background: #202f39;
   opacity: 0.72;
 }
 
-.tutorial-portrait[data-speaking="true"] { opacity: 1; border-color: #e9c57a; }
+.tutorial-portrait[data-speaking="true"] { opacity: 1; }
 .tutorial-portrait img { display: block; width: 100%; transform: scaleX(-1); }
-.tutorial-portrait-garrison img { transform: scale(-1.18, 1.18); }
+.tutorial-portrait-garrison img { transform: translateY(6%) scale(-1.12, 1.12); }
 .tutorial-dialogue {
   padding: clamp(0.9rem, 3vw, 1.4rem);
   border: 1px solid #b89761;
@@ -85,3 +82,15 @@
 .tutorial-controls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.45rem; }
 .tutorial-controls button { min-height: 2.65rem; }
 .tutorial-controls .tutorial-next { background: #eac475; color: #171109; }
+
+.tutorial-line { display: grid; }
+.tutorial-line > span { grid-area: 1 / 1; }
+.tutorial-line-spacer { visibility: hidden; }
+.tutorial-line-accessible {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

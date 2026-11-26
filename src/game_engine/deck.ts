@@ -22,15 +22,17 @@ function createFullDeck(): Card[] {
   return [...createStandardDeck(), { type: "joker", color: "red" }, { type: "joker", color: "black" }];
 }
 
+export const tutorialDeploymentRanks = ["4", "5", "6"] as const;
+
 export function createTutorialDeck(): Card[] {
   const cards = createFullDeck();
   const opening: [Rank, Suit][] = [
     ["4", "hearts"], ["3", "clubs"],
-    ["6", "diamonds"], ["4", "spades"],
+    ["5", "spades"], ["4", "spades"],
     ["6", "hearts"], ["7", "spades"],
     ["J", "spades"], ["Q", "diamonds"],
     ["7", "clubs"], ["5", "diamonds"],
-    ["5", "spades"], ["8", "hearts"],
+    ["6", "diamonds"], ["8", "hearts"],
   ];
   const planned = opening.map(([rank, suit]): Card => ({ type: "standard", rank, suit }));
   const remaining = cards.filter(card => !planned.some(placed =>

@@ -5,7 +5,7 @@ import { sandboxRetreatPlan, saveMatch } from "./playtest";
 import { useCardMotion } from "./useCardMotion";
 import { useAudioForeground, useGameSound, type GameSound } from "./useGameSound";
 import "./SimpleGame.css";
-import { createStandardDeck, createTutorialDeck, dealSimpleGame, ranks } from "./game_engine/deck";
+import { createStandardDeck, createTutorialDeck, dealSimpleGame, ranks, tutorialDeploymentRanks } from "./game_engine/deck";
 import type { Card, Suit } from "./game_engine/types";
 
 export const simpleVersionTitle = "Brad's Card Game";
@@ -1315,7 +1315,10 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const [turnTimerEnabled, setTurnTimerEnabled] = useState(false);
   const [phaseSeconds, setPhaseSeconds] = useState(30);
   const phaseClock = useRef({ round: game.round, turn: game.turn, step: game.step, remaining: 30_000 });
-  const timedPhase = turnTimerEnabled && game.phase === "player" && game.step !== "draw" && !outcome &&
+  const tutorialOpening = tutorial && game.turn === 1 && game.phase === "player";
+  const tutorialRank = tutorialOpening ? tutorialDeploymentRanks[game.playerField.filter(Boolean).length] : undefined;
+  const tutorialDeployment = tutorialRank && game.player.find(card => card.type === "standard" && card.rank === tutorialRank);
+  const timedPhase = !tutorialOpening && turnTimerEnabled && game.phase === "player" && game.step !== "draw" && !outcome &&
     !showingCombatEffect && !warningActive;
 
   useEffect(() => {
@@ -1409,8 +1412,8 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const selectedBack = !!selectedUnit && game.selected !== null && fieldRank(selectedUnit, game.selected) === "back";
   const castleTargeting = canAttackNow && castleOpen && selectedFrontAttacker && !game.pendingAttack && !game.movingStack;
   const choosingHandCard = game.selectedShield || game.selectedStack || game.selectedSpecial;
-  const canReallocateShields = !isComputer && !showingCombatEffect && !game.pendingAttack && !warningActive;
-  const canUseSupport = !isComputer && game.step !== "draw" && !game.pendingAttack && !showingCombatEffect;
+  const canReallocateShields = !tutorialOpening && !isComputer && !showingCombatEffect && !game.pendingAttack && !warningActive;
+  const canUseSupport = !tutorialOpening && !isComputer && game.step !== "draw" && !game.pendingAttack && !showingCombatEffect;
   const canChooseShield = canUseSupport && game.playerField.some(canShield);
   const canSpy = canUseSupport && opponentHasCards;
   const spySelected = canSpy && !!game.selectedShield && isJack(game.selectedShield);
@@ -1422,14 +1425,14 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const spokenQueenCue = useRef<{ round: object; turn: number; cue: string }>();
   const hasOpenLane = openLanes(game.playerField, "back").length > 0;
   const hasStackTarget = (card: Card) => hasHandStack(game.playerField, card);
-  const canStackFromHand = !isComputer && !showingCombatEffect && !game.pendingAttack;
+  const canStackFromHand = !tutorialOpening && !isComputer && !showingCombatEffect && !game.pendingAttack;
   const unlockSound = useGameSound(game, soundEnabled && !paused, showingCombatEffect ? null : outcome);
   const draggedCard = useRef<DraggedCard | null>(null);
   const canDeployFromHand = canDeployThisPhase(game) && hasOpenLane;
   const canToggleHandStack = compactBoard && canDeployFromHand && canStackFromHand &&
     game.player.some(card => hasHandStack(game.playerField, card));
   const choosingHandStack = canToggleHandStack && stackFromHand;
-  const canEndTurn = !isComputer && game.step !== "draw" && !game.pendingAttack && !warningActive && !showingCombatEffect;
+  const canEndTurn = !tutorialRank && !isComputer && game.step !== "draw" && !game.pendingAttack && !warningActive && !showingCombatEffect;
   const pendingTarget = game.pendingAttack && game.computerField[game.pendingAttack.target];
   const pendingPower = pendingTarget && game.pendingAttack?.isStack
     ? calculateAttack(game.playerField, game.pendingAttack.attacker,
@@ -1439,7 +1442,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const canStackSelected = canStackFromHand && selected !== null &&
     game.playerField.some((_, index) => canMoveIntoStack(game, selected, index));
 
-  const nextStep = nextPlayerStep(game);
+  const nextStep = tutorialOpening ? undefined : nextPlayerStep(game);
   const moveOutExhausted = !canStackSelected && game.turn > 2 && isMovingOut && !aimingAttack && !game.selectedStack && !game.selectedSpecial && !hasMoveOutAction(game);
   const moveUpBlocked = !canStackSelected && isMovingUp && !aimingAttack && !game.selectedStack && !game.selectedSpecial && !canMoveUp(game.playerField);
   const openingBackFilled = game.turn === 1 && isMovingOut && !hasOpenLane;
@@ -1655,6 +1658,10 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
 
   function playCard(card: Card) {
     setGame(current => {
+      if (tutorial && current.turn === 1 && current.phase === "player") {
+        const requiredRank = tutorialDeploymentRanks[current.playerField.filter(Boolean).length];
+        if (card.type !== "standard" || card.rank !== requiredRank) return current;
+      }
       const field = [...current.playerField];
       const open = openLanes(field, "back");
       const slot = open.find(lane => laneCards(field, lane - slotsPerRank).length > 0) ?? open[0];
@@ -2058,6 +2065,9 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     }
     if (moveOutExhausted) return hasOpenLane ? "No more cards can be placed. Advancing…" : "Back rank full. Advancing…";
     if (openingBackFilled) return "Back rank full. Ending turn…";
+    if (isMovingOut && tutorialRank) return tutorialRank === "5"
+      ? "Locke: One down. Deploy the highlighted 5 before the Commander starts counting."
+      : `Commander Garrison: Deploy the highlighted ${tutorialRank} to your back rank.`;
     if (isMovingOut && game.turn <= 2) return "Play cards into the back rank, then press END TURN.";
     if (isMovingOut) return "Play cards from your hand into the back rank.";
     if (castleTargeting) return "Castle exposed. Choose one of the computer’s face-down hand cards.";
@@ -2104,6 +2114,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   }
 
   function canUseHandCard(card: Card) {
+    if (tutorialOpening) return canDeployFromHand && card === tutorialDeployment;
     if (isShield(card)) return canChooseShield || (isJack(card) && canSpy) || (isQueen(card) && canDoubleAttack);
     if (isSpecial(card)) return !isComputer && !warningActive && game.turn > 2 && opponentHasCards && !game.pendingAttack && !showingCombatEffect;
     return (canDeployFromHand && canDeploy(card)) || (canStackFromHand && hasStackTarget(card));
@@ -2531,6 +2542,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           <button
             key={card.type === "joker" ? card.color : `${card.rank}-${card.suit}`}
             data-card-position={`player-${index}`}
+            disabled={tutorialOpening && !canUseHandCard(card)}
             draggable={canDragHandCard(card)}
             onDragStart={canDragHandCard(card) ? event => {
               event.dataTransfer.setData("text/plain", "Hand card");
@@ -2543,6 +2555,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             className={[
               choosingHandCard === card ? "simple-game-selected-shield" : inspected === card ? "card-inspected" : "",
               game.step === "draw" && game.drawnCard === card ? "drawn-hand-card" : "",
+              isMovingOut && tutorialDeployment === card ? "tutorial-deploy-card" : "",
             ].filter(Boolean).join(" ")}
             onClick={() => {
               inspect(card);
