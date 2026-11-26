@@ -1989,3 +1989,17 @@ button.simple-game-shield-card:is(:hover, :focus-visible, [aria-pressed="true"])
 .shield-receiver {
   box-shadow: 0 0 0 2px #f7d487, 0 0 0.65rem #ffcc7099;
 }
+
+.player-hand-row > button { cursor: pointer; }
+.player-hand-row > [data-hand-shield-drag] {
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+.player-hand-row > [data-hand-shield-drag]:active { cursor: grabbing; }
+[data-shield-drop-target] {
+  border-radius: 0.55rem;
+  outline: 2px solid #f7d487;
+  outline-offset: 2px;
+  box-shadow: 0 0 0.75rem #ffcc7099;
+}

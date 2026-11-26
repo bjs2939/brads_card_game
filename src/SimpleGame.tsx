@@ -1279,7 +1279,7 @@ function BattlefieldRevealEffect({ card }: { card: Card }) {
     : <LegendaryLightning />;
 }
 
-function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick, canPick, onPickEmpty, canDrag, onDrag, onDragEnd, onDrop, onDropEmpty, onInspect, inspected, onDoublePick, highlighted = false, highlightRanged = false, moveGuide, onTouchRearrange, revealedEffectCards, onPickShield, movingShield, recoveringKnights }: {
+function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick, canPick, onPickEmpty, canDrag, onDrag, onDragEnd, onDrop, onDropEmpty, onInspect, inspected, onDoublePick, highlighted = false, highlightRanged = false, moveGuide, onTouchRearrange, revealedEffectCards, onPickShield, movingShield, recoveringKnights, shieldDropTarget, allowShieldDrop }: {
   onInspect?: (card: Card | null) => void;
   inspected?: Card | null;
   units: Field;
@@ -1287,6 +1287,8 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
   onPickShield?: (index: number, layer: ShieldLayer) => void;
   movingShield?: Game["movingShield"];
   recoveringKnights?: readonly Card[];
+  shieldDropTarget?: number;
+  allowShieldDrop?: boolean;
   label: string;
   rank: FieldRank;
   onPickEmpty?: (lane: number) => void;
@@ -1460,6 +1462,8 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
                       className={`simple-game-stack-card${horizontalFour ? " is-horizontal" : ""}${separateShields ? " has-separate-shields" : ""}`}
                       data-card-position={`${opponent ? "computerField" : "playerField"}-${index}`}
                       data-convert-recovering={recovering || undefined}
+                      data-shield-drop-slot={allowShieldDrop && canShield(unit) ? index : undefined}
+                      data-shield-drop-target={shieldDropTarget === index || undefined}
                       onDragOver={onDrop ? event => event.preventDefault() : undefined}
                       onDrop={onDrop ? event => { event.preventDefault(); onDrop(index, event.shiftKey); } : undefined}
                     >
@@ -2064,6 +2068,40 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const lightningReveal = revealedEffectCards?.some(card => card.type === "standard" && card.rank === "9") ? revealedEffectCards : undefined;
   const unlockSound = useGameSound(game, soundEnabled && !paused, showingCombatEffect ? null : outcome, lightningReveal);
   const draggedCard = useRef<DraggedCard | null>(null);
+  const shieldDrag = useRef<{ card: Card; pointer: number; x: number; y: number; moved: boolean } | null>(null);
+  const suppressHandClick = useRef(false);
+  const [shieldDragPreview, setShieldDragPreview] = useState<{ card: Card; x: number; y: number; target?: number }>();
+
+  function shieldSlotAt(x: number, y: number) {
+    const slot = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-shield-drop-slot]");
+    return slot ? Number(slot.dataset.shieldDropSlot) : undefined;
+  }
+
+  function moveHandShield(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = shieldDrag.current;
+    if (drag?.pointer !== event.pointerId) return;
+    if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 8) return;
+    drag.moved = true;
+    setShieldDragPreview({
+      card: drag.card, x: event.clientX, y: event.clientY,
+      target: shieldSlotAt(event.clientX, event.clientY),
+    });
+  }
+
+  function finishHandShieldDrag(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = shieldDrag.current;
+    if (drag?.pointer !== event.pointerId) return;
+    shieldDrag.current = null;
+    setShieldDragPreview(undefined);
+    if (!drag.moved) return;
+    suppressHandClick.current = true;
+    if (event.type !== "pointerup") return;
+    const target = shieldSlotAt(event.clientX, event.clientY);
+    if (target !== undefined) {
+      setGame(current => canDeployThisPhase(current) ? equipShield(current, drag.card, target) : current);
+    }
+  }
+
   const canDeployFromHand = canDeployThisPhase(game) && hasOpenLane;
   const canToggleHandStack = compactBoard && canDeployFromHand && canStackFromHand &&
     game.player.some(card => hasHandStack(game.playerField, card));
@@ -3188,6 +3226,8 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       onPick={!isComputer && !showingCombatEffect && !game.pendingAttack && !game.selectedSpecial ? pickUnit : undefined}
       canPick={canPickOwnUnit}
       movingShield={canReallocateShields ? game.movingShield : undefined}
+      allowShieldDrop={canChooseShield && !paused && !warningActive}
+      shieldDropTarget={shieldDragPreview?.target}
       onPickShield={canReallocateShields ? (index, layer) => {
         const unit = game.playerField[index];
         if (!unit) return;
@@ -3220,7 +3260,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   ));
 
   function canDragHandCard(card: Card) {
-    return isShield(card) ? canChooseShield : canStackFromHand && hasStackTarget(card);
+    return !isShield(card) && canStackFromHand && hasStackTarget(card);
   }
 
   function canUseHandCard(card: Card) {
@@ -3862,12 +3902,33 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
         )}
       </div>
       {choosingHandStack && <p className="touch-stack-hint">Tap a matching hand card, then tap its stack.</p>}
-      <div className="hand-row player-hand-row" style={compactBoard ? undefined : handLayout}>
+      {shieldDragPreview && (
+        <div className="field-touch-preview" aria-hidden="true" style={{ left: shieldDragPreview.x, top: shieldDragPreview.y }}>
+          <CardFace card={shieldDragPreview.card} />
+        </div>
+      )}
+      <div className="hand-row player-hand-row" style={compactBoard ? undefined : handLayout}
+        onPointerMove={moveHandShield} onPointerUp={finishHandShieldDrag}
+        onPointerCancel={finishHandShieldDrag} onLostPointerCapture={finishHandShieldDrag}
+        onPointerDownCapture={() => { suppressHandClick.current = false; }}
+        onClickCapture={event => {
+          if (!suppressHandClick.current || event.detail === 0) return;
+          suppressHandClick.current = false;
+          event.stopPropagation();
+          event.preventDefault();
+        }}>
         {!setupPending && game.player.map((card, index) => (
           <button
             key={cardKey(card)}
             data-card-position={`player-${index}`}
             disabled={(tutorialOpening || tutorialGuided) && !canUseHandCard(card)}
+            data-hand-shield-drag={isShield(card) && canChooseShield && !paused && !warningActive || undefined}
+            onPointerDown={event => {
+              if (event.button !== 0 || !event.isPrimary || !isShield(card) ||
+                  !canChooseShield || paused || warningActive) return;
+              shieldDrag.current = { card, pointer: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
             draggable={canDragHandCard(card)}
             onDragStart={canDragHandCard(card) ? event => {
               event.dataTransfer.setData("text/plain", "Hand card");
@@ -3903,7 +3964,6 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
               border: 0,
               borderRadius: "0.5rem",
               background: "#fff",
-              cursor: "pointer",
             }}
           >
             <CardFace card={card} />
