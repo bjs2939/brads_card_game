@@ -6,7 +6,7 @@ import { sandboxRetreatPlan, saveMatch } from "./playtest";
 import { useCardMotion } from "./useCardMotion";
 import { useAudioForeground, useGameSound, type GameSound } from "./useGameSound";
 import "./SimpleGame.css";
-import { createStandardDeck, createTutorialDeck, dealSimpleGame, ranks, tutorialDeploymentRanks } from "./game_engine/deck";
+import { createStandardDeck, createTutorialDeck, dealSimpleGame, ranks, shuffleDeck, tutorialDeploymentRanks } from "./game_engine/deck";
 import type { Card, Suit } from "./game_engine/types";
 
 export const simpleVersionTitle = "Brad's Card Game";
@@ -1291,6 +1291,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   onResultChange: (visible: boolean) => void;
 }) {
   const [game, setGame] = useState(() => startGame(tutorial));
+  const [matchTips, setMatchTips] = useState(() => shuffleDeck(opponentTips));
   const [compactBoard, setCompactBoard] = useState(() => window.matchMedia(compactBoardQuery).matches);
   const [showMatchInfo, setShowMatchInfo] = useState(!compactBoard);
   const [showCardInfo, setShowCardInfo] = useState(!compactBoard);
@@ -2969,7 +2970,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             : "Both sides ran out of cards."}</p>
           {game.result && <p>{game.result}</p>}
           <div className="match-result-actions">
-            <button onClick={() => { setSeenLessons(new Set()); setGame(startGame(tutorial)); }}>Play Again</button>
+            <button onClick={() => { setSeenLessons(new Set()); setMatchTips(shuffleDeck(opponentTips)); setGame(startGame(tutorial)); }}>Play Again</button>
             <button onClick={onBack}>Back to Home</button>
           </div>
         </section>
@@ -2984,7 +2985,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       {isComputer && (
         <aside className="opponent-turn-tip" aria-labelledby="opponent-turn-heading">
           <h3 id="opponent-turn-heading">Opponent’s Turn</h3>
-          <p><strong>Tip</strong> {opponentTips[(Math.ceil(game.turn / 2) - 1) % opponentTips.length]}</p>
+          <p><strong>Tip</strong> {matchTips[(Math.ceil(game.turn / 2) - 1) % matchTips.length]}</p>
         </aside>
       )}
       <h1>{simpleVersionTitle}</h1>

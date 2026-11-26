@@ -9,7 +9,7 @@ export function createStandardDeck(): StandardCard[] {
   return suits.flatMap(suit => ranks.map(rank => ({ type: "standard", suit, rank })));
 }
 
-export function shuffleDeck<T extends Card>(deck: T[]): T[] {
+export function shuffleDeck<T>(deck: T[]): T[] {
   const shuffled = [...deck];
   for (let index = shuffled.length - 1; index > 0; index--) {
     const other = Math.floor(Math.random() * (index + 1));
