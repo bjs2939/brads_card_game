@@ -20,7 +20,9 @@ export default function CardFace({ card, faceDown = false }: { card?: Card; face
   const image = faceDown ? "card-back-blue" : label?.replace(/ /g, "-");
   const character = faceDown || !card ? undefined
     : card.type === "joker" ? { sprite: "joker-bomb", className: "card-ranger-overlay", size: 50 }
-    : characters[card.rank];
+    : card.rank === "9" && card.suit === "diamonds"
+      ? { sprite: "wizard-9-diamonds", className: "card-ranger-overlay", size: 60 }
+      : characters[card.rank];
 
   return (
     <div style={{ width: "100%", aspectRatio: "5 / 7", position: "relative" }}>
