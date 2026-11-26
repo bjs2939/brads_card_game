@@ -774,6 +774,32 @@
   border: 1px solid transparent;
   border-radius: 0.5rem;
 }
+.opponent-waiting {
+  position: fixed;
+  z-index: 8;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 0.45em 0.75em;
+  border: 1px solid #bd9659;
+  border-radius: 0.55rem;
+  background: #102137ee;
+  color: #ffe2a0;
+  box-shadow: 0 0.45rem 1.6rem #060d1a99;
+  font: 900 clamp(1.35rem, 5vw, 2.8rem)/1.15 system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.opponent-waiting-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
 .opponent-turn-tip {
   position: fixed;
   z-index: 9;

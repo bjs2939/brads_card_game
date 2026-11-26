@@ -2694,6 +2694,12 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
         </section>
       ) : (
         <>
+      {isComputer && !paused && !showingCombatEffect && !warningActive && (
+        <div className="opponent-waiting" role="status">
+          <span aria-hidden="true">— WAITING —</span>
+          <span className="opponent-waiting-label">Waiting for opponent</span>
+        </div>
+      )}
       {isComputer && (
         <aside className="opponent-turn-tip" aria-labelledby="opponent-turn-heading">
           <h3 id="opponent-turn-heading">Opponent’s Turn</h3>
