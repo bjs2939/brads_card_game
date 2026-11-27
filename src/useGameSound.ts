@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export function useAudioForeground(onBackground: () => void) {
@@ -299,13 +301,18 @@ const backgroundTracks = {
 
 type Track = keyof typeof backgroundTracks;
 
+const battlePlaylist = Object.entries(import.meta.glob<string>(
+  "./assets/music/battle/*.{mp3,ogg,wav,m4a,flac,MP3,OGG,WAV,M4A,FLAC}",
+  { eager: true, query: "?url", import: "default" },
+)).sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true })).map(([, url]) => url);
+
 type MusicPlayback = { track: Track; abort: AbortController; source?: AudioBufferSourceNode };
 
 export function useBackgroundMusic(track: Track | null) {
   const [enabled, setEnabled] = useState(false);
   const engine = useRef<{ context: AudioContext; gain: GainNode }>();
   const playback = useRef<MusicPlayback>();
-  const decoded = useRef<{ track: Track; buffer: AudioBuffer }>();
+  const decoded = useRef<{ url: string; buffer: AudioBuffer }>();
   const muted = useRef(false);
   const ducked = useRef(false);
   const hasInteracted = useRef(false);
@@ -323,19 +330,18 @@ export function useBackgroundMusic(track: Track | null) {
     playback.current = undefined;
     current?.abort.abort();
     if (current?.source) {
+      current.source.onended = null;
       current.source.stop();
       current.source.disconnect();
     }
     setEnabled(false);
   }, []);
 
-  const leavePage = useCallback(() => {
-    hasInteracted.current = false;
-    stopMusic();
+  const pauseMusic = useCallback(() => {
     const context = engine.current?.context;
     if (context && context.state !== "closed") void context.suspend().catch(() => {});
-  }, [stopMusic]);
-  const { canPlayAudio } = useAudioForeground(leavePage);
+  }, []);
+  const { foreground, canPlayAudio } = useAudioForeground(pauseMusic);
 
   const start = useCallback((which: Track) => {
     if (muted.current || !canPlayAudio() || !window.AudioContext || playback.current?.track === which) return;
@@ -352,38 +358,48 @@ export function useBackgroundMusic(track: Track | null) {
     const current: MusicPlayback = { track: which, abort: new AbortController() };
     playback.current = current;
     const { file, volume } = backgroundTracks[which];
-    const cached = decoded.current;
-    if (cached?.track !== which) decoded.current = undefined;
-    const ready = cached?.track === which ? Promise.resolve(cached.buffer)
-      : fetch(`${import.meta.env.BASE_URL}assets/audio/music/${file}`, { signal: current.abort.signal })
-          .then(response => {
-            if (!response.ok) throw new Error("Music asset unavailable");
-            return response.arrayBuffer();
-          })
-          .then(bytes => context.decodeAudioData(bytes));
+    const defaultUrl = `${import.meta.env.BASE_URL}assets/audio/music/${file}`;
+    const playlist = which === "battle" ? [defaultUrl, ...battlePlaylist] : [defaultUrl];
+    gain.gain.value = volume * (ducked.current ? 0.28 : 1);
+    void context.resume().catch(() => {});
 
-    void Promise.all([context.resume(), ready]).then(([, buffer]) => {
-      if (playback.current !== current) return;
-      if (!canPlayAudio() || muted.current || context.state !== "running") {
-        stopMusic();
-        return;
+    async function play(index: number, remainingAttempts = playlist.length) {
+      const url = playlist[index];
+      try {
+        const cached = decoded.current;
+        let buffer = cached?.url === url ? cached.buffer : undefined;
+        if (!buffer) {
+          const response = await fetch(url, { signal: current.abort.signal });
+          if (!response.ok) throw new Error("Music asset unavailable");
+          buffer = await context.decodeAudioData(await response.arrayBuffer());
+        }
+        if (playback.current !== current) return;
+        decoded.current = { url, buffer };
+        const source = context.createBufferSource();
+        source.buffer = buffer;
+        source.loop = playlist.length === 1;
+        source.connect(gain);
+        source.onended = () => {
+          source.disconnect();
+          if (playback.current !== current) return;
+          current.source = undefined;
+          void play((index + 1) % playlist.length);
+        };
+        source.start();
+        current.source = source;
+        setEnabled(true);
+      } catch {
+        if (playback.current !== current) return;
+        if (remainingAttempts > 1) void play((index + 1) % playlist.length, remainingAttempts - 1);
+        else stopMusic();
       }
-      decoded.current = { track: which, buffer };
-      const source = context.createBufferSource();
-      source.buffer = buffer;
-      source.loop = true;
-      source.connect(gain);
-      gain.gain.value = volume * (ducked.current ? 0.28 : 1);
-      source.start();
-      current.source = source;
-      setEnabled(true);
-    }).catch(() => {
-      if (playback.current === current) stopMusic();
-    });
+    }
+
+    void play(0);
   }, [canPlayAudio, stopMusic]);
 
   function toggle() {
-    if (enabled) {
+    if (playback.current) {
       muted.current = true;
       stopMusic();
     } else if (track) {
@@ -394,8 +410,12 @@ export function useBackgroundMusic(track: Track | null) {
 
   useEffect(() => {
     if (!track) stopMusic();
-    else if (hasInteracted.current) start(track);
-  }, [track, start, stopMusic]);
+    else if (foreground && hasInteracted.current && canPlayAudio()) {
+      if (playback.current?.track === track) {
+        void engine.current?.context.resume().catch(() => {});
+      } else start(track);
+    }
+  }, [track, foreground, canPlayAudio, start, stopMusic]);
 
   useEffect(() => {
     if (!track || enabled) return;
