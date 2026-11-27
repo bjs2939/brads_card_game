@@ -3,10 +3,12 @@
 
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { friendRoomMiddleware } from "./multiplayer/rooms.mjs";
 
 // vite configuration for brads card game
 export default defineConfig({
-  plugins: [react()],
+  cacheDir: ".cache/vite",
+  plugins: [react(), { name: "friend-rooms", configureServer(server) { server.middlewares.use(friendRoomMiddleware()); } }],
 
   server: {
     port: 5173,

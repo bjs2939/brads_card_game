@@ -131,3 +131,25 @@
 .difficulty-info:focus-within [role="tooltip"] {
   display: block;
 }
+
+.friend-lobby {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.friend-lobby p, .friend-lobby [role="status"] {
+  margin: 0;
+}
+
+.friend-lobby label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.friend-lobby input, .friend-lobby select {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.55rem;
+  border-radius: 0.4rem;
+  font: inherit;
+}

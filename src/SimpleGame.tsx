@@ -851,7 +851,9 @@ function chooseComputerAttack(game: Game, difficulty: Difficulty, roll: number, 
           score = 0;
         }
       }
-      return requireProductive && score < 4 ? [] : [{ attacker, target, power, tacticalScore: score }];
+      if (requireProductive && score < 4) return [];
+      const rearRanger = difficulty === "Hard" && isRanger(unit.card) && fieldRank(unit, attacker) === "back";
+      return [{ attacker, target, power, tacticalScore: score + (rearRanger ? 0.5 : 0) }];
     });
   });
 
@@ -1180,6 +1182,8 @@ function drawForTurn(game: Game, side: "player" | "computer"): Game {
 }
 
 function hasNoAttackOptions(game: Game) {
+  if (game.turn > 2 && game.player.some(isSpecial)) return false;
+
   if (game.step === "attack") {
     return !game.playerField.some((unit, index) => unit?.card.type === "standard" &&
       (unit.card.rank === "6" || (isNumber(unit.card) && fieldRank(unit, index) === "front"))
@@ -2366,9 +2370,23 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             const source = sources.findIndex(lane => laneCards(field, lane).some(({ unit }) => upcoming(unit.card)));
             if (source > 0) sources.unshift(...sources.splice(source, 1));
           }
+          const planRangerPosition = !tutorial && difficulty === "Hard";
+          const attackScore = (computerField: Field) =>
+            chooseComputerAttack({ ...current, computerField }, "Hard", 0).attack?.tacticalScore ?? 0;
           for (const lane of openLanes(field, "front")) {
-            const source = sources.shift();
-            if (source === undefined) break;
+            let sourceIndex = 0;
+            if (planRangerPosition) {
+              sourceIndex = sources.findIndex(source => laneCards(field, source).some(({ unit }) => !isRanger(unit.card)));
+              if (sourceIndex < 0 && !attackRestricted(current, "computer")) {
+                const currentScore = attackScore(field);
+                sourceIndex = sources.findIndex(source => {
+                  const advancedScore = attackScore(moveUp(field, source, lane));
+                  return advancedScore >= 4 && advancedScore > currentScore;
+                });
+              }
+            }
+            if (sourceIndex < 0 || sourceIndex >= sources.length) break;
+            const [source] = sources.splice(sourceIndex, 1);
             field = moveUp(field, source, lane);
           }
           return { ...current, computerField: field, phase: "computer-move-out", step: "move-out" };
@@ -2396,9 +2414,13 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
               if (index > 0) available.unshift(...available.splice(index, 1));
             }
           }
-          for (const lane of empty) {
+          while (empty.length) {
             const card = available.shift();
             if (!card) break;
+            const coveredIndex = !tutorial && difficulty === "Hard" && isRanger(card)
+              ? empty.findIndex(lane => laneCards(field, lane - slotsPerRank).length > 0)
+              : -1;
+            const [lane] = empty.splice(Math.max(0, coveredIndex), 1);
             field[lane] = deploy(card);
           }
           const combined = current.turn > 2 ? findComputerStack(current, field) : field;
@@ -3553,7 +3575,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       </dialog>
       {recoveryPreview && (
         <div className="player-draw-preview discard-recovery-preview" data-collector={recoveryPreview.side} role="status">
-          <strong>{recoveryPreview.side === "player" ? "Garbage Collection" : "Enemy Garbage Collection"}</strong>
+          <strong>{recoveryPreview.side === "player" ? "You collected from the discard pile" : "Computer collected from the discard pile"}</strong>
           <CardFace card={recoveryPreview.card} />
         </div>
       )}

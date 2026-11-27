@@ -18,6 +18,7 @@ const suitSprites: Partial<Record<Rank, Partial<Record<Suit, string>>>> = {
   "9": {
     hearts: "flame-swordsman-9-hearts",
     clubs: "spear-warrior-9-clubs",
+    spades: "dark-rider-9-spades",
     diamonds: "wizard-9-diamonds",
   },
 };
