@@ -22,6 +22,7 @@ export default function HomePage() {
   const [trainingGrounds, setTrainingGrounds] = useState(false);
   const [tutorial, setTutorial] = useState(false);
   const [showIntro, setShowIntro] = useState(false);
+  const [friendAvailable, setFriendAvailable] = useState(import.meta.env.DEV);
   const [menu, setMenu] = useState<"modes" | "difficulty" | "tutorial" | "friend">(() => import.meta.env.DEV && inviteCode() ? "friend" : "modes");
   const [showingResult, setShowingResult] = useState(false);
   const [garbageMusic, setGarbageMusic] = useState(false);
@@ -30,7 +31,22 @@ export default function HomePage() {
   const music = useBackgroundMusic(!difficulty ? "menu" : showingResult ? null : garbageMusic ? "garbage-collection" : "battle");
 
   useEffect(() => {
-    if (import.meta.env.DEV && inviteCode()) modePicker.current?.showModal();
+    const controller = new AbortController();
+    if (import.meta.env.DEV) {
+      if (inviteCode()) modePicker.current?.showModal();
+    } else if (import.meta.env.BASE_URL === "/") {
+      void fetch("/api/friend-rooms", { signal: controller.signal }).then(async response => {
+        if (!response.ok || !response.headers.get("Content-Type")?.includes("application/json")) return;
+        const status = await response.json();
+        if (!status.available || controller.signal.aborted) return;
+        setFriendAvailable(true);
+        if (inviteCode()) {
+          setMenu("friend");
+          if (!modePicker.current?.open) modePicker.current?.showModal();
+        }
+      }).catch(() => {});
+    }
+    return () => controller.abort();
   }, []);
 
   function stopTutorialAudio() {
@@ -148,7 +164,7 @@ export default function HomePage() {
               <button type="button" onClick={() => setMenu("tutorial")}>Tutorial</button>
               <button onClick={() => setMenu("difficulty")}>VS Computer</button>
               <button disabled>Online Matchmaking <small>Coming soon</small></button>
-              {import.meta.env.DEV ? <button onClick={() => setMenu("friend")}>VS Friend</button>
+              {friendAvailable ? <button onClick={() => setMenu("friend")}>VS Friend</button>
                 : <button disabled>VS Friend <small>Coming soon</small></button>}
               <button type="button" onClick={() => launchMatch("Sandbox", true)}>Training Grounds</button>
             </>
