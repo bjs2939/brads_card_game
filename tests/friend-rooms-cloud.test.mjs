@@ -26,6 +26,7 @@ test("production room handler shares settings while protecting both seats", asyn
     });
     assert.equal((await send("GET")).status, 503);
     db.exec(readFileSync(new URL("../multiplayer/schema.sql", import.meta.url), "utf8"));
+    db.exec(readFileSync(new URL("../multiplayer/match-schema.sql", import.meta.url), "utf8"));
     assert.equal((await send("GET")).status, 200);
     const setup = { name: "Host", firstTurn: "flip", jokers: 4 };
     assert.equal((await send("POST", [], setup, "", "https://other.example")).status, 403);
@@ -42,6 +43,19 @@ test("production room handler shares settings while protecting both seats", asyn
     const restored = await (await send("GET", [host.code], undefined, guest.token)).json();
     assert.deepEqual(restored.settings, { ...change, timer: false });
     assert.equal(restored.token, undefined);
+    const start = [host.code, "start"];
+    assert.equal((await send("POST", start, {}, guest.token)).status, 403);
+    const started = await (await send("POST", start, {}, host.token)).json();
+    assert.equal(started.opening.firstSeat, "guest");
+    assert.equal(started.opening.hand.length, 5);
+    assert.equal(started.opening.deckCount, 43);
+    assert.equal(started.opening.drawPile, undefined);
+    assert.equal(started.opening.hands, undefined);
+    const guestOpening = (await (await send("GET", [host.code], undefined, guest.token)).json()).opening;
+    assert.equal(guestOpening.hand.length, 5);
+    assert.ok(guestOpening.hand.every(card => !started.opening.hand.some(other => JSON.stringify(card) === JSON.stringify(other))));
+    assert.deepEqual((await (await send("POST", start, {}, host.token)).json()).opening, started.opening);
+    assert.equal((await send("PATCH", [host.code], setup, host.token)).status, 403);
     db.exec("UPDATE friend_rooms SET expires_at = 0");
     assert.equal((await send("GET", [host.code], undefined, guest.token)).status, 404);
   } finally {

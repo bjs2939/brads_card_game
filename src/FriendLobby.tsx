@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
+import CardFace from "./CardFace";
+import type { Card } from "./game_engine/types";
 
 type FirstTurn = "flip" | "host" | "guest";
 type Room = {
   code: string;
   seat: "host" | "guest";
   ready: boolean;
+  opening?: { firstSeat: "host" | "guest"; hand: Card[]; opponentCardCount: number; deckCount: number };
   hostName: string;
   guestName?: string;
   settings: { firstTurn: FirstTurn; jokers: number; timer: boolean };
@@ -98,6 +101,25 @@ export default function FriendLobby({ playerName }: { playerName: string }) {
     }
   }
 
+  async function startMatch() {
+    if (!room?.ready || room.seat !== "host") return;
+    const token = sessionStorage.getItem(credentialKey);
+    if (!token) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      setRoom(await roomRequest("/" + room.code + "/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: "{}",
+      }));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not start the match.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const settingsFields = (
     <>
           <label>First turn <select value={firstTurn} onChange={event => setFirstTurn(event.target.value as FirstTurn)}>
@@ -114,7 +136,17 @@ export default function FriendLobby({ playerName }: { playerName: string }) {
 
   return (
     <div className="friend-lobby">
-      {room ? (
+      {room?.opening ? (
+        <>
+          <p role="status">{room.opening.firstSeat === room.seat ? "You go first." : "Your friend goes first."}</p>
+          <p>Your opening hand</p>
+          <div className="friend-opening-hand">
+            {room.opening.hand.map((card, index) => <CardFace key={index} card={card} />)}
+          </div>
+          <p>Opponent hand: {room.opening.opponentCardCount} cards · Deck: {room.opening.deckCount} cards</p>
+          <p>Opening deal preview. Battlefield turns and combat are coming next.</p>
+        </>
+      ) : room ? (
         <>
           <p>{room.ready ? "Both players joined." : "Waiting for your friend to join…"}</p>
           <p>Host: {room.hostName}{room.guestName && <> · Guest: {room.guestName}</>}</p>
@@ -138,7 +170,9 @@ export default function FriendLobby({ playerName }: { playerName: string }) {
               setEditing(true);
             }}>Edit Settings</button>
           ))}
-          <p>Lobby preview. Match play is coming next.</p>
+          {room.ready && (room.seat === "host" ? (
+            <button type="button" disabled={busy || editing} onClick={() => void startMatch()}>Start Match</button>
+          ) : <p>Waiting for the host to start the match.</p>)}
         </>
       ) : (
         <>

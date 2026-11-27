@@ -175,3 +175,9 @@
   white-space: nowrap;
   color: #edc477;
 }
+
+.friend-opening-hand {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.35rem;
+}

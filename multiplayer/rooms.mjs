@@ -1,3 +1,4 @@
+import { dealFriendOpening, openingForSeat } from "./friend-opening.mjs";
 import { randomBytes } from "node:crypto";
 
 const lifetime = 4 * 60 * 60 * 1000;
@@ -17,6 +18,7 @@ export function friendRooms({ now = Date.now } = {}) {
       seat,
       ready: Boolean(room.guest),
       settings: room.settings,
+      ...(room.opening && { opening: openingForSeat(room.opening, seat) }),
       hostName: room.hostName, guestName: room.guestName,
     });
 
@@ -41,12 +43,18 @@ export function friendRooms({ now = Date.now } = {}) {
       return reply(201, { ...view(room, "host"), token: room.host });
     }
 
-    const route = /^\/([A-Fa-f0-9]{16})(\/join)?$/.exec(path);
+    const route = /^\/([A-Fa-f0-9]{16})(\/join|\/start)?$/.exec(path);
     if (!route) return error(404, "Room not found.");
     const room = rooms.get(route[1].toUpperCase());
     if (!room) return error(404, "This room has expired or does not exist.");
 
-    if (route[2] && method === "POST") {
+    if (route[2] === "/start" && method === "POST") {
+      if (token !== room.host) return error(403, "Only the host can start the match.");
+      if (!room.guest) return error(409, "Wait for a friend to join.");
+      room.opening ??= dealFriendOpening(room.settings);
+      return reply(200, view(room, "host"));
+    }
+    if (route[2] === "/join" && method === "POST") {
       if (room.guest) return error(409, "This room already has two players.");
       if (!nameValid) return error(400, nameError);
       room.guestName = name;
@@ -55,6 +63,7 @@ export function friendRooms({ now = Date.now } = {}) {
     }
     if (!route[2] && method === "PATCH") {
       if (token !== room.host) return error(403, "Only the host can edit settings.");
+      if (room.opening) return error(409, "The match has already started.");
       if (!settingsValid) return error(400, settingsError);
       room.settings = { ...room.settings, firstTurn, jokers };
       return reply(200, view(room, "host"));

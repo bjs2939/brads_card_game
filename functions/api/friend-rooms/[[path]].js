@@ -1,3 +1,5 @@
+import { dealFriendOpening, openingForSeat } from "../../../multiplayer/friend-opening.mjs";
+
 const headers = { "Cache-Control": "no-store" };
 const reply = (status, data) => Response.json(data, { status, headers });
 const error = (status, message) => reply(status, { error: message });
@@ -9,6 +11,7 @@ function view(room, seat) {
     code: room.code,
     seat,
     ready: Boolean(room.guest_token),
+    opening: room.opening ? openingForSeat(JSON.parse(room.opening), seat) : undefined,
     hostName: room.host_name,
     guestName: room.guest_name ?? undefined,
     settings: { firstTurn: room.first_turn, jokers: room.jokers, timer: false },
@@ -53,7 +56,7 @@ export async function onRequest({ request, env, params }) {
 
   try {
     if (path === "" && method === "GET") {
-      await db.prepare("SELECT code FROM friend_rooms LIMIT 1").first();
+      await db.prepare("SELECT room_code FROM friend_matches LIMIT 1").first();
       return reply(200, { available: true });
     }
     if (path === "" && method === "POST") {
@@ -68,10 +71,22 @@ export async function onRequest({ request, env, params }) {
       return room ? reply(201, { ...view(room, "host"), token: host }) : error(503, "Room capacity reached.");
     }
 
-    const route = /^([A-Fa-f0-9]{16})(\/join)?$/.exec(path);
+    const route = /^([A-Fa-f0-9]{16})(\/join|\/start)?$/.exec(path);
     if (!route) return error(404, "Room not found.");
     const code = route[1].toUpperCase();
-    if (route[2] && method === "POST") {
+    if (route[2] === "/start" && method === "POST") {
+      const room = await db.prepare("SELECT * FROM friend_rooms WHERE code = ? AND host_token = ? AND expires_at > ?")
+        .bind(code, token, now).first();
+      if (!room) return error(403, "Only the host can start the match.");
+      if (!room.guest_token) return error(409, "Wait for a friend to join.");
+      const opening = JSON.stringify(dealFriendOpening({ firstTurn: room.first_turn, jokers: room.jokers }));
+      await db.prepare(
+        "INSERT OR IGNORE INTO friend_matches (room_code, opening) SELECT code, ? FROM friend_rooms WHERE code = ? AND expires_at > ? AND first_turn = ? AND jokers = ?",
+      ).bind(opening, code, now, room.first_turn, room.jokers).run();
+      const started = await db.prepare("SELECT opening FROM friend_matches WHERE room_code = ?").bind(code).first();
+      return started ? reply(200, view({ ...room, ...started }, "host")) : error(409, "Room settings changed. Try again.");
+    }
+    if (route[2] === "/join" && method === "POST") {
       if (!nameValid) return error(400, "Enter a player name of 1 to 24 characters.");
       const guest = randomHex(24);
       const joined = await db.prepare(
@@ -84,13 +99,13 @@ export async function onRequest({ request, env, params }) {
     if (!route[2] && method === "PATCH") {
       if (!settingsValid) return error(400, "Choose who goes first and a Joker count from 0 to 4.");
       const room = await db.prepare(
-        "UPDATE friend_rooms SET first_turn = ?, jokers = ? WHERE code = ? AND host_token = ? AND expires_at > ? RETURNING *",
+        "UPDATE friend_rooms SET first_turn = ?, jokers = ? WHERE code = ? AND host_token = ? AND expires_at > ? AND NOT EXISTS (SELECT 1 FROM friend_matches WHERE room_code = friend_rooms.code) RETURNING *",
       ).bind(firstTurn, jokers, code, token, now).first();
       return room ? reply(200, view(room, "host")) : error(403, "Only the host of an active room can edit settings.");
     }
     if (!route[2] && method === "GET") {
       const room = await db.prepare(
-        "SELECT * FROM friend_rooms WHERE code = ? AND expires_at > ? AND (host_token = ? OR guest_token = ?)",
+        "SELECT friend_rooms.*, friend_matches.opening FROM friend_rooms LEFT JOIN friend_matches ON room_code = code WHERE code = ? AND expires_at > ? AND (host_token = ? OR guest_token = ?)",
       ).bind(code, now, token, token).first();
       return room ? reply(200, view(room, token === room.host_token ? "host" : "guest"))
         : error(404, "This room has expired or your seat could not be restored.");
