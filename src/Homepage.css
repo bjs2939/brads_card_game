@@ -153,3 +153,25 @@
   border-radius: 0.4rem;
   font: inherit;
 }
+
+.game-home {
+  position: relative;
+  padding-top: max(4.5rem, 6vw);
+}
+
+.game-home-profile {
+  position: absolute;
+  top: 0.9rem;
+  right: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  max-width: calc(100% - 1.8rem);
+}
+
+.game-home-profile-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #edc477;
+}

@@ -83,6 +83,11 @@ export default function HomePage() {
 
   return (
     <main className="game-home">
+      <button className="game-home-profile playtest-button" type="button" aria-haspopup="dialog" onClick={() => {
+        setNameDraft(playerName);
+        setEditingName(true);
+        modePicker.current?.showModal();
+      }}>Profile{playerName && <span className="game-home-profile-name">{playerName}</span>}</button>
       <div className="game-home-panel">
         <div className="game-home-cards" aria-hidden="true">
           <CardFace card={{ type: "standard", rank: "K", suit: "hearts" }} />
@@ -96,11 +101,6 @@ export default function HomePage() {
             <button className="game-home-primary" aria-haspopup="dialog" onClick={() => { setEditingName(false); setMenu("modes"); modePicker.current?.showModal(); }}>Play Brad’s Card Game</button>
           </div>
           <div className="playtest-actions">
-            {playerName && <button className="playtest-button" type="button" onClick={() => {
-              setNameDraft(playerName);
-              setEditingName(true);
-              modePicker.current?.showModal();
-            }}>Change player name</button>}
             <Feedback context={`Version ${gameVersion} · Main menu`} />
             <MatchHistory />
           </div>
@@ -110,7 +110,7 @@ export default function HomePage() {
         </div>
       </div>
       <dialog ref={modePicker} className="game-mode-picker" aria-labelledby="game-mode-title">
-        <h2 id="game-mode-title">{editingName || !playerName ? "Choose a player name" : menu === "difficulty" ? "Choose a difficulty" : menu === "tutorial" ? "Choose a tutorial" : menu === "friend" ? "VS Friend" : "Choose a game mode"}</h2>
+        <h2 id="game-mode-title">{editingName ? "Profile" : !playerName ? "Choose a player name" : menu === "difficulty" ? "Choose a difficulty" : menu === "tutorial" ? "Choose a tutorial" : menu === "friend" ? "VS Friend" : "Choose a game mode"}</h2>
         <div className="game-mode-options">
           {editingName || !playerName ? (
             <form className="friend-lobby" onSubmit={event => {
@@ -122,7 +122,8 @@ export default function HomePage() {
               setEditingName(false);
               if (editingName) modePicker.current?.close();
             }}>
-              <label>Player name <input autoComplete="nickname" maxLength={24} required value={nameDraft}
+              {editingName && <p><strong>Temporary Account</strong><br />Your username is saved in this browser. Registered accounts are coming soon.</p>}
+              <label>{editingName ? "Username" : "Player name"} <input autoComplete="nickname" maxLength={24} required value={nameDraft}
                 onChange={event => setNameDraft(event.target.value)} /></label>
               <button type="submit" disabled={!nameDraft.trim()}>{editingName ? "Save name" : "Continue"}</button>
             </form>
