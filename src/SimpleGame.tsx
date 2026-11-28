@@ -1094,9 +1094,23 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       setMatchNote("");
       return;
     }
+    if (friendOpening) return;
     const lines = describeMatchActions(previous, game);
     if (lines.length) setMatchLog(entries => [...entries, ...lines.map(line => `Turn ${Math.ceil(previous.turn / 2)} · ${line}`)]);
-  }, [game]);
+  }, [game, friendOpening]);
+
+  const lastLoggedFriendRevision = useRef(-1);
+  useEffect(() => {
+    if (!friendOpening || lastLoggedFriendRevision.current >= friendOpening.revision) return;
+    lastLoggedFriendRevision.current = friendOpening.revision;
+    const attack = friendOpening.completedAttack;
+    if (attack) {
+      const actor = attack.byYou ? "You attacked" : `${friendOpening.opponentName} attacked`;
+      setMatchLog(entries => [...entries, `Turn ${attack.turn} · ${actor}. ${friendOpening.result ?? ""} ${friendOpening.outcome ? "Match ended." : "Turn ended."}`]);
+    } else if (friendOpening.result) {
+      setMatchLog(entries => [...entries, `Turn ${friendOpening.turn} · ${friendOpening.result}`]);
+    }
+  }, [friendOpening]);
 
   useEffect(() => {
     const log = logView.current;
@@ -2583,7 +2597,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     return "Select a front-rank number card or an Ace or King from your hand.";
   }
 
-  const turnMessage = friendOpening ? (friendStack !== null ? "Choose a matching back-rank card to stack onto." : friendOpening.outcome ? (friendOpening.outcome === "draw" ? "Match drawn." : friendOpening.outcome === "victory" ? "You won the match." : "Your friend won the match.") : friendOpening.turn > 2 ? (!friendOpening.canAct ? "Waiting for your friend to end their turn." : friendSpecial !== null ? "Choose an opposing card for your special attack." : friendShield !== null ? "Choose a troop to receive the shield." : game.selected !== null ? "Choose an opposing card to attack, or an open slot to move." : "Move, deploy, select an attacker, or end your turn.") : friendOpening.canAct ? friendShield !== null ? "Choose a troop to receive the shield." : "Deploy troops or equip a Jack or Queen, then end your turn." : "Waiting for your friend to end their turn.") : getTurnMessage();
+  const turnMessage = friendOpening ? (!friendOpening.outcome && friendOpening.completedAttack ? friendOpening.completedAttack.byYou ? `Attack complete. Your turn ended. Waiting for ${friendOpening.opponentName}.` : `${friendOpening.opponentName} finished their attack. It’s your turn.` : friendStack !== null ? "Choose a matching back-rank card to stack onto." : friendOpening.outcome ? (friendOpening.outcome === "draw" ? "Match drawn." : friendOpening.outcome === "victory" ? "You won the match." : "Your friend won the match.") : friendOpening.turn > 2 ? (!friendOpening.canAct ? "Waiting for your friend to end their turn." : friendSpecial !== null ? "Choose an opposing card for your special attack." : friendShield !== null ? "Choose a troop to receive the shield." : game.selected !== null ? "Choose an opposing card to attack, or an open slot to move." : "Move, deploy, select an attacker, or end your turn.") : friendOpening.canAct ? friendShield !== null ? "Choose a troop to receive the shield." : "Deploy troops or equip a Jack or Queen, then end your turn." : "Waiting for your friend to end their turn.") : getTurnMessage();
   const lightningBolt = (
     <img
       className="special-strike-bolt"
@@ -3215,7 +3229,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             />
           ))}
           <div className="field-center-line" aria-live="polite">
-            <span>TURN {Math.ceil(game.turn / 2)} · {isComputer ? "ENEMY" : "PLAYER"} — {skipAttack ? "ENDING TURN" : turnSteps[game.step].toUpperCase()}</span>
+            <span>TURN {friendOpening?.turn ?? Math.ceil(game.turn / 2)} · {friendOpening ? friendOpening.canAct ? "YOUR TURN" : friendOpening.opponentName : isComputer ? "ENEMY" : "PLAYER"} — {skipAttack ? "ENDING TURN" : turnSteps[game.step].toUpperCase()}</span>
           </div>
           {offenseRestricted && (
             <div className="convert-status convert-status-top" role="status">

@@ -113,9 +113,13 @@ export function playFriendBattle(battle, seat, action, index, target, shieldInde
   if (next === game) return null;
   if (next.phase === "computer") {
     const passed = pass(battle, next);
-    return { ...passed, attack: next.attackAnimation && { ...next.attackAnimation, seat, at: Date.now() } };
+    return {
+      ...passed,
+      attack: next.attackAnimation && { ...next.attackAnimation, seat, at: Date.now() },
+      completedAttack: { seat, turn: game.turn },
+    };
   }
-  return { ...battle, game: { ...next, recoveredDiscard: undefined }, attack: undefined };
+  return { ...battle, game: { ...next, recoveredDiscard: undefined }, attack: undefined, completedAttack: undefined };
 }
 
 export function battleForSeat(battle, seat) {
@@ -130,8 +134,11 @@ export function battleForSeat(battle, seat) {
       ...game.recoveredDiscard, side: own ? game.recoveredDiscard.side : game.recoveredDiscard.side === "player" ? "computer" : "player",
     },
     attack: battle.attack && { ...battle.attack, side: battle.attack.seat === seat ? "player" : "computer" },
+    completedAttack: battle.completedAttack && {
+      turn: battle.completedAttack.turn, byYou: battle.completedAttack.seat === seat,
+    },
     recovery: game.convertRecovery?.[own ? "player" : "computer"]?.turn === game.turn,
-    result: game.result.replace(/^You attacked/, battle.attack?.seat === seat ? "You attacked" : "Your friend attacked")
+    result: game.result.replace(/^You attacked/, (battle.completedAttack?.seat ?? battle.attack?.seat) === seat ? "You attacked" : "Your friend attacked")
       .replace(/^Convert!.*?joined your hand\. You cannot attack next turn\./, own ? "Your friend converted a card and cannot attack next turn." : "$&"),
     outcome: outcome && (own || outcome === "draw" ? outcome : outcome === "victory" ? "defeat" : "victory"),
   };

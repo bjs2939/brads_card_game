@@ -6,7 +6,7 @@ import type { Field, ShieldLayer, TurnStep, Unit, Game } from "./game_engine/bat
 
 export type FriendAction = "deploy" | "shield" | "end-turn" | "next" | "promote" | "rearrange" | "stack-hand" | "stack-field" | "attack" | "convert" | "special" | "castle" | "retreat" | "collect" | "undo" | "transfer";
 type EnemyUnit = Omit<Unit, "card" | "shields"> & { card?: Card; shields?: { card?: Card; revealed: boolean }[] };
-type FriendBattleView = { attack?: NonNullable<Game["attackAnimation"]> & { at: number }; recoveredDiscard?: Game["recoveredDiscard"]; recovery?: boolean; ownField?: Field; enemyField?: (EnemyUnit | null)[]; step?: TurnStep; active?: boolean; discardPile?: Card[]; result?: string; outcome?: "victory" | "defeat" | "draw" };
+type FriendBattleView = { completedAttack?: { turn: number; byYou: boolean }; attack?: NonNullable<Game["attackAnimation"]> & { at: number }; recoveredDiscard?: Game["recoveredDiscard"]; recovery?: boolean; ownField?: Field; enemyField?: (EnemyUnit | null)[]; step?: TurnStep; active?: boolean; discardPile?: Card[]; result?: string; outcome?: "victory" | "defeat" | "draw" };
 type FirstTurn = "flip" | "host" | "guest";
 export type FriendOpeningView = FriendBattleView & { hand: Card[]; opponentCardCount: number; deckCount: number; goesFirst: boolean; opponentName: string; code: string; turn: number; revision: number; canAct: boolean; deployed: Card[]; opponentDeployed: number; shields?: ShieldLayer[][]; opponentShieldCounts?: number[]; ownField?: Field; active?: boolean };
 type Room = {
