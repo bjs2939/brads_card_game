@@ -1,7 +1,7 @@
 import type { FriendAction, FriendOpeningView } from "./FriendLobby";
 import { TutorialBattleDialogue, tutorialLessons } from "./TutorialIntro";
 import { useCallback, useEffect, useRef, useState } from "react";
-import CardFace, { BattlePiece } from "./CardFace";
+import CardFace, { BattlePiece, suitSymbols } from "./CardFace";
 import { Feedback, gameVersion } from "./PlaytestPanels";
 import { sandboxRetreatPlan, saveMatch } from "./playtest";
 import { useCardMotion } from "./useCardMotion";
@@ -51,7 +51,6 @@ const opponentTips = [
   "When the enemy battlefield is empty, a front-rank attacker can strike the castle.",
 ];
 
-const suitSymbols = { hearts: "♥", diamonds: "♦", clubs: "♣", spades: "♠" };
 
 const handLayout = {
   display: "grid",
@@ -2912,8 +2911,8 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           <div className="attack-cutaway-scene">
             {game.attackAnimation.kind === "convert" ? (
               <>
-                <img className="attack-cutaway-sprite convert-knight"
-                  src={`${import.meta.env.BASE_URL}assets/effects/holy-knight-7.gif`} alt="" />
+                <BattlePiece card={game.attackAnimation.attacker}
+                  className="attack-cutaway-sprite" spriteClassName="convert-knight" />
                 <span className="convert-magic-travel" aria-hidden="true">
                   <span className="convert-magic-frames"
                     style={{ backgroundImage: `url(${import.meta.env.BASE_URL}assets/effects/holy-knight-convert.png)` }} />
@@ -2926,9 +2925,8 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
               </>
             ) : (
               <>
-                <img className="attack-cutaway-sprite" src={`${import.meta.env.BASE_URL}assets/effects/${
-                  game.attackAnimation.kind === "dragon" ? "dragon-attack.gif" : "ranger-attack.gif?v=2"
-                }`} alt="" />
+                <BattlePiece card={game.attackAnimation.attacker} className="attack-cutaway-sprite"
+                  animation={game.attackAnimation.kind === "dragon" ? "dragon-attack.gif" : "ranger-attack.gif?v=2"} />
                 <span className={game.attackAnimation.kind === "dragon" ? "dragon-fire" : "ranger-arrow"} aria-hidden="true" />
               </>
             )}

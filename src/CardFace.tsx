@@ -1,5 +1,7 @@
 import type { Card, Rank, Suit } from "./game_engine/types";
 
+export const suitSymbols = { hearts: "♥", diamonds: "♦", clubs: "♣", spades: "♠" };
+
 const faceRanks: Partial<Record<Rank, string>> = { A: "ace", J: "jack", Q: "queen", K: "king" };
 
 const characters: Partial<Record<Rank, { sprite: string; className: string; size: number }>> = {
@@ -33,9 +35,24 @@ function cardSprite(card?: Card, attachedShield = false) {
         ? { sprite: "shield-jq", className: "", size: 32 } : characters[card.rank];
 }
 
-export function BattlePiece({ card }: { card: Card }) {
+export function BattlePiece({ card, animation, className, spriteClassName }: {
+  card: Card;
+  animation?: string;
+  className?: string;
+  spriteClassName?: string;
+}) {
   const sprite = cardSprite(card);
-  return sprite ? <img className="battle-piece" src={`${import.meta.env.BASE_URL}assets/effects/${sprite.sprite}.gif`} alt="" /> : <CardFace card={card} />;
+  const filename = animation ?? (sprite && `${sprite.sprite}.gif`);
+  if (!filename) return <CardFace card={card} />;
+  return (
+    <div className={className}>
+      <img className={`battle-piece ${spriteClassName ?? ""}`}
+        src={`${import.meta.env.BASE_URL}assets/effects/${filename}`} alt="" draggable={false} />
+      <span className="battle-piece-stamp" data-suit={card.type === "standard" ? card.suit : undefined}>
+        {card.type === "standard" ? `${card.rank}${suitSymbols[card.suit]}` : "Joker"}
+      </span>
+    </div>
+  );
 }
 
 export default function CardFace({ card, faceDown = false, attachedShield = false }: { card?: Card; faceDown?: boolean; attachedShield?: boolean }) {

@@ -1184,6 +1184,19 @@
   position: relative;
 }
 .battle-piece { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; image-rendering: pixelated; }
+.battle-piece-stamp {
+  display: table;
+  margin: 0.25rem auto 0;
+  padding: 0.16rem 0.48rem;
+  border: 1px solid #eac47c;
+  border-radius: 0.4rem;
+  background: #f8edd4;
+  color: #211a16;
+  font: 800 0.85rem/1.15 system-ui, sans-serif;
+  white-space: nowrap;
+}
+.battle-piece-stamp[data-suit="hearts"],
+.battle-piece-stamp[data-suit="diamonds"] { color: #9d1730; }
 .attack-cutaway-impact {
   animation: ranger-card-impact 400ms 1440ms both;
 }
