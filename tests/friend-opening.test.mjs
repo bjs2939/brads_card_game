@@ -139,6 +139,20 @@ test("a Joker blast survives multiplayer turn handoff for both seats", () => {
   }
 });
 
+test("deck countdown warnings reach both multiplayer seats", () => {
+  const card = { type: "standard", rank: "3", suit: "hearts" };
+  for (const remaining of [10, 5, 4, 3, 2, 1, 0]) {
+    const battle = startFriendBattle({ firstSeat: "host", hands: { host: [], guest: [] },
+      fields: { host: [], guest: [] }, drawPile: Array.from({ length: remaining + 1 }, () => card) });
+    for (const seat of ["host", "guest"]) {
+      const view = battleForSeat(battle, seat);
+      assert.equal(view.deckCount, remaining);
+      assert.equal(view.deckWarning, remaining);
+      assert.ok(view.deckWarningAt > 0);
+    }
+  }
+});
+
 test("attached Queens grant two attacks and attached Jacks spy then pass the turn", () => {
   const card = (rank, suit) => ({ type: "standard", rank, suit });
   const jack = card("J", "diamonds");
@@ -153,7 +167,7 @@ test("attached Queens grant two attacks and attached Jacks spy then pass the tur
 
   const spied = playFriendBattle(withShield(jack), "host", "shield-ability", 3, undefined, 0);
   assert.equal(spied.seat, "guest");
-  assert.equal(spied.game.playerField[3].revealed, true);
+  assert.equal(spied.game.playerField[3].revealed, false);
   assert.equal(spied.game.computerField[3].shields.length, 0);
   assert.deepEqual(spied.game.discardPile, [jack]);
 

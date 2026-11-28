@@ -1009,15 +1009,16 @@
 }
 
 .joker-blast-overlay {
+  z-index: 15;
   background: radial-gradient(circle, #fa691e54 0%, #5e252153 53%, #33162b7a 100%);
-  animation: joker-blast-show 2.25s both;
+  animation: none;
 }
 .joker-blast-overlay > img {
   position: absolute;
   width: min(92vw, 52rem);
   height: min(86vh, 49rem);
   object-fit: contain;
-  animation: joker-blast-expand 0.9s cubic-bezier(.15,.6,.25,1) both;
+  animation: none;
 }
 .joker-blast-overlay > strong,
 .joker-blast-overlay > span {
@@ -1056,7 +1057,7 @@
 }
 
 .joker-blast-overlay > strong {
-  animation: joker-blast-caption 0.85s both;
+  animation: none;
 }
 .joker-blast-outcome {
   position: absolute;
@@ -1066,7 +1067,7 @@
   align-items: center;
   justify-content: center;
   gap: 0.65rem;
-  animation: joker-outcome-show 1.54s 0.65s both;
+  animation: none;
 }
 .joker-blast-outcome strong {
   padding: .22em .6em;
@@ -2140,4 +2141,3 @@ button.simple-game-shield-card:is(:hover, :focus-visible, [aria-pressed="true"])
   outline: 2px solid #fff2ba;
   outline-offset: 3px;
 }
-

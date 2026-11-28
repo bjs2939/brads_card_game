@@ -17,7 +17,7 @@ const characters: Partial<Record<Rank, { sprite: string; className: string; size
 
 const suitSprites: Partial<Record<Rank, Partial<Record<Suit, string>>>> = {
   "8": { clubs: "unicorn-lancer-8-clubs", spades: "dark-rider-9-spades", diamonds: "pegasus-rider-8-diamonds" },
-  "10": { hearts: "dragon-10-hearts" },
+  "10": { hearts: "dragon-10-hearts", clubs: "dragon-10-clubs" },
   "9": {
     hearts: "flame-swordsman-9-hearts",
     clubs: "spear-warrior-9-clubs-steady",
@@ -26,7 +26,7 @@ const suitSprites: Partial<Record<Rank, Partial<Record<Suit, string>>>> = {
   },
 };
 
-function cardSprite(card?: Card, attachedShield = false) {
+function cardSprite(card?: Card, attachedShield = false, fourShieldBroken = false) {
   const suitSprite = card?.type === "standard" ? suitSprites[card.rank]?.[card.suit] : undefined;
   return !card ? undefined
     : card.type === "joker" ? { sprite: "joker-bomb", className: "card-ranger-overlay", size: 50 }
@@ -35,7 +35,10 @@ function cardSprite(card?: Card, attachedShield = false) {
           : suitSprite === "pegasus-rider-8-diamonds" ? "card-pegasus-rider-overlay"
           : suitSprite === "dragon-10-hearts" ? "card-heart-dragon-overlay" : "card-ranger-overlay", size: 60 }
       : !attachedShield && (card.rank === "J" || card.rank === "Q")
-        ? { sprite: "shield-jq", className: "", size: 32 } : characters[card.rank];
+        ? { sprite: "shield-jq", className: "", size: 32 }
+        : card.rank === "4" && fourShieldBroken
+          ? { ...characters["4"]!, sprite: "knight-4-unshielded" }
+          : characters[card.rank];
 }
 
 export function BattlePiece({ card, animation, className, spriteClassName }: {
@@ -58,7 +61,7 @@ export function BattlePiece({ card, animation, className, spriteClassName }: {
   );
 }
 
-export default function CardFace({ card, faceDown = false, attachedShield = false }: { card?: Card; faceDown?: boolean; attachedShield?: boolean }) {
+export default function CardFace({ card, faceDown = false, attachedShield = false, fourShieldBroken = false }: { card?: Card; faceDown?: boolean; attachedShield?: boolean; fourShieldBroken?: boolean }) {
   const label = card?.type === "joker"
     ? `${card.color} joker`
     : card && `${faceRanks[card.rank] ?? card.rank} of ${card.suit}`;
@@ -66,7 +69,7 @@ export default function CardFace({ card, faceDown = false, attachedShield = fals
   const image = faceDown ? "card-back-blue" : label?.replace(/ /g, "-");
   const legendary = !faceDown && card?.type === "standard" && card.rank === "9";
   const dragon = !faceDown && card?.type === "standard" && card.rank === "10";
-  const character = faceDown ? undefined : cardSprite(card, attachedShield);
+  const character = faceDown ? undefined : cardSprite(card, attachedShield, fourShieldBroken);
 
   return (
     <div data-legendary-card={legendary || undefined} data-dragon-card={dragon || undefined} data-blue-rider={character?.sprite === "dark-rider-9-spades" || undefined} data-fiery-spartan={character?.sprite === "spear-warrior-9-clubs-steady" || undefined} style={{ width: "100%", aspectRatio: "5 / 7", position: "relative" }}>

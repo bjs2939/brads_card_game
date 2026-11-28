@@ -5,6 +5,7 @@ import { Feedback, MatchHistory, gameVersion } from "./PlaytestPanels";
 import SimpleGame, { difficulties, simpleVersionTitle, type Difficulty } from "./SimpleGame";
 import { useBackgroundMusic } from "./useGameSound";
 import FriendLobby, { inviteCode, resumableFriendCode, syncFriendMatch, type FriendAction, type FriendOpeningView } from "./FriendLobby";
+import CampaignMap from "./CampaignMap";
 import "./Homepage.css";
 
 const difficultyDescriptions: Record<Difficulty, string> = {
@@ -23,6 +24,7 @@ export default function HomePage() {
   const [trainingGrounds, setTrainingGrounds] = useState(false);
   const [tutorial, setTutorial] = useState(false);
   const [showIntro, setShowIntro] = useState(false);
+  const [showCampaign, setShowCampaign] = useState(false);
   const [friendAvailable, setFriendAvailable] = useState(import.meta.env.DEV);
   const [menu, setMenu] = useState<"modes" | "difficulty" | "tutorial" | "friend">(() => import.meta.env.DEV && inviteCode() ? "friend" : "modes");
   const [showingResult, setShowingResult] = useState(false);
@@ -94,6 +96,7 @@ export default function HomePage() {
   }
 
   function goHome() {
+    setShowCampaign(false);
     stopTutorialAudio();
     setShowingResult(false);
     setGarbageMusic(false);
@@ -101,6 +104,16 @@ export default function HomePage() {
     setTutorial(false);
     setShowIntro(false);
     setDifficulty(null);
+  }
+
+  function leaveFriendMatch() {
+    const url = new URL(window.location.href);
+    url.hash = "";
+    history.replaceState(null, "", url);
+    setMenu("modes");
+    setShowingResult(false);
+    setGarbageMusic(false);
+    setFriendOpening(undefined);
   }
 
   function launchMatch(level: Difficulty, training = false, tutorialMatch = false) {
@@ -120,8 +133,10 @@ export default function HomePage() {
   if (friendOpening) {
     return <SimpleGame difficulty="Normal" friendOpening={friendOpening} onFriendMove={moveFriend} music={music}
       onResultChange={setShowingResult} onGarbageMusicChange={setGarbageMusic}
-      onBack={() => setFriendOpening(undefined)} />;
+      onBack={leaveFriendMatch} />;
   }
+
+  if (showCampaign) return <CampaignMap onBack={goHome} />;
 
   if (difficulty) {
     return <SimpleGame difficulty={difficulty} trainingGrounds={trainingGrounds} tutorial={tutorial} tutorialAudio={tutorialAudio.current} onBack={goHome} music={music} onResultChange={setShowingResult} onGarbageMusicChange={setGarbageMusic} />;
@@ -194,10 +209,15 @@ export default function HomePage() {
               <button type="button" onClick={openTutorial}>Tutorial 1 – Basic Gameplay</button>
               <button disabled>Tutorial 2 – Garbage Collection <small>Coming soon</small></button>
               <button disabled>Tutorial 3 – Conversions <small>Coming soon</small></button>
+              <button disabled>Tutorial 4 – Diamond +1 <small>Coming soon</small></button>
+              <button disabled>Tutorial 5 – Rat Trap <small>Coming soon</small></button>
+              <button disabled>Tutorial 6 – Nimble &amp; Scurry <small>Coming soon</small></button>
+              <button disabled>Tutorial 7 – Spies <small>Coming soon</small></button>
+              <button disabled>Tutorial 8 – Advanced Tactics <small>Coming soon</small></button>
             </>
           ) : (
             <>
-              <button disabled>Campaign <small>Coming soon</small></button>
+              <button type="button" onClick={() => { modePicker.current?.close(); setShowCampaign(true); }}>Campaign <small>Coming soon</small></button>
               <button type="button" onClick={() => setMenu("tutorial")}>Tutorial</button>
               <button onClick={() => setMenu("difficulty")}>VS Computer</button>
               <button disabled>Online Matchmaking <small>Coming soon</small></button>

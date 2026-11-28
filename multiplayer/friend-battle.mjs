@@ -1,5 +1,5 @@
 import {
-  advancePlayerStep, attackDefense, castleAttackerIndex, deploy, deployFromHand, dropFieldUnit, unstackUnit,
+  advancePlayerStep, attackDefense, castleAttackerIndex, deploy, deployFromHand, scurryFromHand, dropFieldUnit, unstackUnit,
   cardKey, drawForTurn, equipShield, makeAttackAnimation, matchOutcome, revealCollectors, isCollector,
   playerStepAfterDraw, preferredPromotionLane, promoteUnit, rearrangeRank, resolveAttack,
   resolveSpecial, stackOnto, transferPlayerShield, undoPlayerMovement, useShieldAbility, continueDoubleAttack, visibleConvertRecovery,
@@ -36,8 +36,11 @@ export function startFriendBattle(opening) {
 
 function beginTurn(game) {
   const drawn = drawForTurn({ ...game, phase: "player", attackAnimation: undefined,
-    jokerExplosion: undefined, specialStrike: undefined, spyFlash: undefined, recoveredDiscard: undefined, extraAttack: false }, "player");
-  return { ...drawn, step: playerStepAfterDraw(drawn), drawnCard: undefined, deckWarning: undefined };
+    jokerExplosion: undefined, specialStrike: undefined, spyFlash: undefined, recoveredDiscard: undefined,
+    deckWarning: undefined, deckWarningEvent: undefined, extraAttack: false }, "player");
+  return { ...drawn, step: playerStepAfterDraw(drawn), drawnCard: undefined,
+    deckWarning: undefined,
+    deckWarningEvent: drawn.deckWarning !== undefined ? { count: drawn.deckWarning, at: Date.now() } : undefined };
 }
 
 function pass(battle, game) {
@@ -98,6 +101,7 @@ export function playFriendBattle(battle, seat, action, index, target, shieldInde
     next = deployFromHand(game, card);
     if (next !== game && game.step !== "move-up") next.result = "Card deployed.";
   }
+  if (action === "scurry" && card && target !== undefined) next = scurryFromHand(game, card, target);
   if ((action === "attack" || action === "convert") && unit && game.computerField[target]) {
     const defense = attackDefense(game.computerField, target, game.computerField[target]);
     if (shieldIndex !== undefined && (!Number.isInteger(shieldIndex) || !defense.layers[shieldIndex])) return null;
@@ -139,7 +143,9 @@ export function battleForSeat(battle, seat) {
   const revealedEnemyCards = new Set(enemyField.flatMap(unit => unit?.revealed ? [cardKey(unit.card)] : []));
   return {
     hand: own ? game.player : game.computer, opponentCardCount: (own ? game.computer : game.player).length,
-    deckCount: game.drawPile.length, turn: game.turn, step: game.step, active: own && !outcome,
+    deckCount: game.drawPile.length, deckWarning: game.deckWarningEvent?.count,
+    deckWarningAt: game.deckWarningEvent?.at,
+    turn: game.turn, step: game.step, active: own && !outcome,
     undoCount: own && !outcome ? game.movements?.length ?? 0 : 0,
     ownField: own ? game.playerField : game.computerField, enemyField: maskFriendField(own ? game.computerField : game.playerField),
     discardPile: game.discardPile, recoveredDiscard: game.recoveredDiscard && {

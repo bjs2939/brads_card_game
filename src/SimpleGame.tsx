@@ -12,13 +12,13 @@ import { canDeploy, createFullDeck, createTutorialDeck, dealSimpleGame, shuffleD
 import type { Card, Suit } from "./game_engine/types";
 import {
   slotsPerRank, rankLanes, turnSteps, suitAdvantage, suitNames,
-  labCardName, cardKey, isNumber, isJack, isQueen,
+  labCardName, cardKey, isNumber, isJack, isQueen, isNimble, canScurry,
   isShield, hasFourShield, canShield, deploy, strength,
   canStack, matchesStack, isSpecial, laneOf, laneCards,
   canMoveIntoStack, addToStack, fieldRank, hasBackRankCards, canAttackTarget,
   canAttackFrom, attackRestricted, visibleConvertRecovery, isRanger, isHolyKnight, castleAttackerIndex,
   openLanes, canMoveUp, canDeployThisPhase, hasMoveOutAction, moveOutOrAttack,
-  nextPlayerStep, advancePlayerStep, hasHandStack, openingPlaysExhausted, deployFromHand,
+  nextPlayerStep, advancePlayerStep, hasHandStack, openingPlaysExhausted, deployFromHand, scurryFromHand,
   undoPlayerMovement, moveUp, rearrangeRank, dropFieldUnit, unstackDestination, unstackUnit, preferredPromotionLane, promoteUnit,
   equipShield, transferPlayerShield, stackOnto, offense, isSpecialImmune,
   resolveSpecial, attackDefense, calculateAttack, makeAttackAnimation, stackVictimChoices,
@@ -397,6 +397,7 @@ function findComputerStack(game: Game, field: Field) {
 
 function startGame(tutorial = false, starter: Side = "player", jokerCount = 4, deal?: ReturnType<typeof dealSimpleGame>): Game {
   const opening: Game = {
+    tutorialRules: tutorial,
     ...(deal ?? dealSimpleGame(tutorial ? createTutorialDeck() : shuffleDeck(createFullDeck(jokerCount)))),
     playerField: [],
     backRankAtTurnStart: [],
@@ -417,7 +418,7 @@ function startGame(tutorial = false, starter: Side = "player", jokerCount = 4, d
   return tutorial ? drawForTurn({ ...opening, turn: 0 }, "player") : opening;
 }
 
-function CardDetails({ card, layers }: { card: Card | null | undefined; layers: number }) {
+function CardDetails({ card, layers, tutorial = false }: { card: Card | null | undefined; layers: number; tutorial?: boolean }) {
   if (card === undefined) return (
     <div className="card-details">
       <h3>Card Details</h3>
@@ -444,10 +445,10 @@ function CardDetails({ card, layers }: { card: Card | null | undefined; layers: 
       case "Q": abilities.push("Shield: uses its own suit and the protected card’s strength. Can disguise a Joker.");
         abilities.push("Double Attack: discard this Queen to attack twice this turn.");
         break;
-      case "2": abilities.push("Defeats 10s and is immune to their attacks."); break;
-      case "3": abilities.push("Garbage Collection: three revealed 3s on your field recover the oldest discarded card at the end of your turn."); break;
+      case "2": abilities.push("Defeats 10s and is immune to their attacks."); if (!tutorial) abilities.push("Nimble: move freely from front to back rank."); break;
+      case "3": abilities.push("Garbage Collection: three revealed 3s on your field recover the oldest discarded card at the end of your turn."); if (!tutorial) abilities.push("Scurry: deploy from hand to the front rank. Nimble: move freely from front to back rank."); break;
       case "4": abilities.push("Built-in shield: absorbs the first non-immune regular hit."); break;
-      case "5": abilities.push("Joker immunity: survives a Joker trap without losing its shields."); break;
+      case "5": abilities.push("Joker immunity: survives a Joker trap without losing its shields."); if (!tutorial) abilities.push("EMP Jammer: resists Jack Spy, regardless of suit."); break;
       case "6": abilities.push("Range: 2. Attack the enemy front rank from your back rank, or reach the enemy back rank from your front rank past occupied slots."); break;
       case "7": abilities.push("Convert: reveal the target stack and its shields. Win to recruit the defender or the shield you broke into your hand. A successful recruit locks your next turn’s offensive actions."); break;
       case "10": abilities.push("A 2 is immune to this card and can defeat it."); break;
@@ -456,7 +457,7 @@ function CardDetails({ card, layers }: { card: Card | null | undefined; layers: 
     const immune = (Object.keys(suitAdvantage) as Suit[]).find(suit => suitAdvantage[suit] === card.suit);
     if (isNumber(card) && favored && immune) abilities.push(`+1 against ${suitNames[favored]}. Blocked by ${suitNames[immune]}.`);
     else if (isSpecial(card) && immune) abilities.push(`Blocked by ${suitNames[immune]}.`);
-    else if (card.suit === "diamonds") abilities.push("Neutral suit.");
+    else if (card.suit === "diamonds") abilities.push(!tutorial && isNumber(card) ? "+1 when attacking Diamonds." : "Neutral suit.");
   }
 
   return (
@@ -593,7 +594,7 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
       }}>
       {touchPreview && touchedUnit && (
         <div className="field-touch-preview" aria-hidden="true" style={{ left: touchPreview.x, top: touchPreview.y }}>
-          <CardFace card={touchedUnit.card} faceDown={!touchedUnit.revealed} />
+          <CardFace card={touchedUnit.card} faceDown={!touchedUnit.revealed} fourShieldBroken={touchedUnit.fourShieldBroken} />
         </div>
       )}
       <p>{label}</p>
@@ -637,7 +638,7 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
                           <span className="four-shield-art"><CardFace card={unit.card} /></span>
                           <span className="four-shield-label">Shield</span>
                         </span>
-                      ) : <CardFace card={faceDown ? undefined : unit.card} faceDown={faceDown} />}
+                      ) : <CardFace card={faceDown ? undefined : unit.card} faceDown={faceDown} fourShieldBroken={unit.fourShieldBroken} />}
                       {privateCard && (
                         <span
                           className="simple-game-private-card"
@@ -849,19 +850,25 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     setFriendSpecial(null);
     setFriendStack(null);
     const hiddenCard: Card = { type: "joker", color: "black" };
+    const attackAge = friendOpening.attack ? Date.now() - friendOpening.attack.at : Infinity;
+    const attackDuration = friendOpening.attack?.kind === "card" ? 1150 : 1900;
+    const blastAge = friendOpening.jokerExplosion ? Date.now() - friendOpening.jokerExplosion.at : Infinity;
+    const blastStarts = friendOpening.attack ? attackDuration : 0;
     setGame(current => ({
       ...current,
       player: friendOpening.hand,
       computer: new Array<Card>(friendOpening.opponentCardCount),
       drawPile: new Array<Card>(friendOpening.deckCount),
+      deckWarning: friendOpening.deckWarningAt && Date.now() - friendOpening.deckWarningAt < 5450 ? friendOpening.deckWarning : undefined,
       phase: friendOpening.canAct ? "player" : "computer",
       turn: friendOpening.turn,
       step: friendOpening.step ?? "move-out",
       selected: null, pendingAttack: undefined, movingShield: undefined,
       discardPile: friendOpening.discardPile ?? [], result: friendOpening.result ?? "",
-      attackAnimation: friendOpening.attack && Date.now() - friendOpening.attack.at < 5000 ? friendOpening.attack : undefined,
+      attackAnimation: friendOpening.attack && attackAge < attackDuration ? friendOpening.attack : undefined,
       specialStrike: friendOpening.specialStrike && Date.now() - friendOpening.specialStrike.at < 2000 ? friendOpening.specialStrike : undefined,
-      jokerExplosion: friendOpening.jokerExplosion && Date.now() - friendOpening.jokerExplosion.at < 5000 ? friendOpening.jokerExplosion : undefined,
+      jokerExplosion: friendOpening.jokerExplosion && blastAge >= blastStarts && blastAge < blastStarts + 2250
+        ? friendOpening.jokerExplosion : undefined,
       recoveredDiscard: friendOpening.recoveredDiscard,
       spyFlash: friendOpening.spy && Date.now() - friendOpening.spy.at < 5000 ? friendOpening.spy.card : undefined,
       extraAttack: friendOpening.doubleAttack === 2,
@@ -1220,7 +1227,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       setGame(current => current.attackAnimation === strike ? { ...current, attackAnimation: undefined } : current);
     }, strike.kind === "card" ? 1150 : 1900);
     return () => window.clearTimeout(timer);
-  }, [game.attackAnimation, paused, friendOpening]);
+  }, [game.attackAnimation, paused, !!friendOpening]);
 
   const deckWarning = showingCombatEffect ? undefined : game.deckWarning;
   const warningActive = deckWarning !== undefined;
@@ -1277,15 +1284,15 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       } : current);
     }, 2250);
     return () => window.clearTimeout(timer);
-  }, [game.jokerExplosion, game.attackAnimation, paused, tutorial, friendOpening]);
+  }, [game.jokerExplosion, game.attackAnimation, paused, tutorial, !!friendOpening]);
 
   useEffect(() => {
-    if (deckWarning === undefined || paused) return;
+    if (deckWarning === undefined || (paused && !friendOpening)) return;
     const timer = window.setTimeout(() => {
       setGame(current => current.deckWarning === deckWarning ? { ...current, deckWarning: undefined } : current);
     }, 5450);
     return () => window.clearTimeout(timer);
-  }, [deckWarning, paused]);
+  }, [deckWarning, paused, !!friendOpening]);
 
   const warningSpeechTimer = useRef<number>();
   const stopSpeech = useCallback(() => {
@@ -1305,7 +1312,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   useEffect(() => stopSpeech, [stopSpeech]);
 
   useEffect(() => {
-    if (deckWarning === undefined || paused || !soundEnabled || !window.speechSynthesis ||
+    if (deckWarning === undefined || (paused && !friendOpening) || !soundEnabled || !window.speechSynthesis ||
         typeof SpeechSynthesisUtterance === "undefined" || !canSpeak()) return;
     const timer = window.setTimeout(() => {
       if (!canSpeak()) return;
@@ -1317,7 +1324,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     }, 3530);
     warningSpeechTimer.current = timer;
     return () => window.clearTimeout(timer);
-  }, [deckWarning, soundEnabled, paused, canSpeak]);
+  }, [deckWarning, soundEnabled, paused, !!friendOpening, canSpeak]);
 
   const isComputer = game.phase !== "player";
   const isMovingUp = !isComputer && game.step === "move-up";
@@ -1505,6 +1512,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     if (game.selectedShield || game.movingShield) return canShield(unit);
     if (game.selectedStack) return fieldRank(unit, index) === "back" && matchesStack(game.selectedStack, unit.card);
     if (game.movingStack && selected !== null) return index === selected || canMoveIntoStack(game, selected, index);
+    if (!game.tutorialRules && isNimble(unit.card) && fieldRank(unit, index) === "front" && canDeployThisPhase(game) && openLanes(game.playerField, "back").length) return true;
     if (canAttackNow && canAttackFrom(unit, index, game.computerField, game.computer.length)) return true;
     if (!tutorialGuided && isMovingUp && fieldRank(unit, index) === "back" && isRanger(unit.card)) return true;
     if (isMovingUp && fieldRank(unit, index) === "back" && openLanes(game.playerField, "front").length > 0) return true;
@@ -2202,6 +2210,12 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   function dropOnEmptyLane(lane: number) {
     const source = draggedCard.current;
     draggedCard.current = null;
+    if (source?.from === "hand" && !tutorialGuided && !tutorialOpening && !game.tutorialRules &&
+        canScurry(source.card) && rankLanes.front.includes(lane)) {
+      if (friendOpening) void sendFriendMove("scurry", game.player.indexOf(source.card), lane);
+      else setGame(current => scurryFromHand(current, source.card, lane));
+      return;
+    }
     if (source?.from !== "field") return;
     if ((tutorialRevenge || movingReserveToCover) && lane !== tutorialCoverLane) return;
     dropFieldAt(source.index, lane);
@@ -2652,20 +2666,24 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       onInspect={inspect}
       inspected={inspected}
       onPickEmpty={friendOpening ? friendCanAct && friendOpening.turn > 2 && selected !== null &&
-        (rank === selectedRank || (rank === "front" && selectedRank === "back" && isMovingUp)) ? lane => {
+        (rank === selectedRank || (rank === "front" && selectedRank === "back" && isMovingUp) ||
+          (rank === "back" && selectedRank === "front" && !!selectedUnit && isNimble(selectedUnit.card))) ? lane => {
         const unit = game.playerField[selected];
         if (!unit) return;
         if (rank === fieldRank(unit, selected)) void sendFriendMove("rearrange", selected, lane);
         else if (rank === "front" && isMovingUp) void sendFriendMove("promote", selected, lane);
+        else if (rank === "back" && isNimble(unit.card)) void sendFriendMove("drop-field", selected, lane);
       } : undefined : tutorialRevenge || movingReserveToCover
         ? rank === "front" && selected !== null && (movingReserveToCover || !revengeReady) ? moveTutorialCover : undefined
         : rank === "back" && placingTutorialSix && tutorialSixSelected ? moveTutorialSix
         : rank === "front" && isMovingUp && selectedBack && (tutorialGuided || !selectedBackRanger) &&
-          !(tutorialDuel && tutorialSixSelected) ? moveSelectedUp : undefined}
+          !(tutorialDuel && tutorialSixSelected) ? moveSelectedUp
+        : rank === "back" && !game.tutorialRules && selected !== null && selectedUnit && isNimble(selectedUnit.card)
+          ? lane => dropFieldAt(selected, lane) : undefined}
       canDrag={index => {
         if (friendOpening) return canDragFriendField;
         const unit = game.playerField[index];
-        return canStackFromHand ||
+        return canStackFromHand || (!game.tutorialRules && rank === "front" && !!unit && isNimble(unit.card) && canDeployThisPhase(game)) ||
           ((movingReserveToCover || (tutorialRevenge && !revengeReady)) && rank === "front" && !!unit && canPickOwnUnit(unit, index)) ||
           (placingTutorialSix && rank === "back" && !!unit && isTutorialSix(unit.card));
       }}
@@ -2677,12 +2695,15 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       onDrag={index => { draggedCard.current = { from: "field", index }; }}
       onDragEnd={() => { draggedCard.current = null; }}
       onDrop={canDragFriendField || canStackFromHand ? dropOnCard : undefined}
-      onDropEmpty={canDragFriendField || canStackFromHand || placingTutorialSix || ((movingReserveToCover || (tutorialRevenge && !revengeReady)) && rank === "front") ? dropOnEmptyLane : undefined}
+      onDropEmpty={canDragFriendField || canStackFromHand || placingTutorialSix ||
+        (!game.tutorialRules && canDeployThisPhase(game) && (rank === "front" || rank === "back")) ||
+        ((movingReserveToCover || (tutorialRevenge && !revengeReady)) && rank === "front") ? dropOnEmptyLane : undefined}
     />
   ));
 
   function canDragHandCard(card: Card) {
-    return !friendOpening && !isShield(card) && canStackFromHand && hasStackTarget(card);
+    return !game.tutorialRules && canScurry(card) && canDeployThisPhase(game) && openLanes(game.playerField, "front").length > 0 ||
+      !friendOpening && !isShield(card) && canStackFromHand && hasStackTarget(card);
   }
 
   function canUseHandCard(card: Card) {
@@ -2718,7 +2739,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       onPointerCancel={finishShieldDrag} onLostPointerCapture={finishShieldDrag}
       onPointerDownCapture={() => { suppressShieldClick.current = false; }}
       onClickCapture={event => {
-        if (friendOpening && !(event.target instanceof Element && event.target.closest(".player-hand-row button, .simple-game-end-turn, .match-footer-home, [data-music-toggle], [data-card-position] button, .simple-game-next-step, .field-slot-open, .opponent-hand-row button, .stack-target-picker button, [aria-labelledby=holy-knight-title] button, .retreat-button, [data-friend-action]"))) {
+        if (friendOpening && !(event.target instanceof Element && event.target.closest(".player-hand-row button, .simple-game-end-turn, .match-footer-home, .match-result-actions button, [data-music-toggle], [data-card-position] button, .simple-game-next-step, .field-slot-open, .opponent-hand-row button, .stack-target-picker button, [aria-labelledby=holy-knight-title] button, .retreat-button, [data-friend-action]"))) {
           event.preventDefault(); event.stopPropagation(); return;
         }
         if (suppressShieldClick.current && event.detail !== 0) {
@@ -2902,7 +2923,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           <strong>{deckWarning === 0 ? "Sudden Death" : deckWarning === 1 ? "1 Card Remains" : `${deckWarning} Cards Remain`}</strong>
         </div>
       )}
-      {game.attackAnimation && (!paused || !!friendOpening) && (
+      {game.attackAnimation && !game.jokerExplosion && (!paused || !!friendOpening) && (
         <aside className={`attack-cutaway attack-cutaway--${game.attackAnimation.kind}`} role="status">
           <strong>{game.attackAnimation.side === "computer" ? "Enemy " : ""}
             {game.attackAnimation.kind === "convert" ? "Holy Knight Conversion"
@@ -2969,7 +2990,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           ) : null}
         </aside>
       )}
-      {game.jokerExplosion && !game.attackAnimation && (
+      {game.jokerExplosion && (
         <div className="joker-blast-overlay" key={game.jokerExplosion.turn} aria-hidden="true">
           <img src={`${import.meta.env.BASE_URL}assets/effects/joker-explosion.png`} alt="" draggable={false} />
           <strong>Joker Explosion!</strong>
@@ -3021,18 +3042,18 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           <h1 id="match-title" tabIndex={-1} ref={resultHeading}>
             {outcome === "victory" ? "Victory!" : outcome === "defeat" ? "Defeat" : "Draw"}
           </h1>
-          <p>{outcome === "victory" ? "The computer ran out of cards. You’re the last player standing."
-            : outcome === "defeat" ? "You ran out of cards. The computer is the last player standing."
+          <p>{outcome === "victory" ? `${friendOpening ? "Your friend" : "The computer"} ran out of cards. You’re the last player standing.`
+            : outcome === "defeat" ? `You ran out of cards. ${friendOpening ? "Your friend" : "The computer"} is the last player standing.`
             : "Both sides ran out of cards."}</p>
           {game.result && <p>{game.result}</p>}
           <div className="match-result-actions">
-            <button onClick={() => {
+            {!friendOpening && <button onClick={() => {
               setSeenLessons(new Set());
               setMatchTips(shuffleDeck(opponentTips));
               setGame(startGame(tutorial));
               setFlipWinner(null);
               setSetupPending(needsGameSetup);
-            }}>Play Again</button>
+            }}>Play Again</button>}
             <button onClick={onBack}>Back to Home</button>
           </div>
         </section>
@@ -3326,7 +3347,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             </p>
           )}
           </div>
-          <CardDetails card={inspected} layers={inspectedUnit?.shields?.length ?? 0} />
+          <CardDetails card={inspected} layers={inspectedUnit?.shields?.length ?? 0} tutorial={game.tutorialRules} />
           {canReallocateShields && inspectedOwnUnit?.shields?.map((layer, index) => (
             <button key={index} className="shield-move-button"
               aria-pressed={game.movingShield?.layer === layer}
@@ -3381,7 +3402,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           <button
             key={cardKey(card)}
             data-card-position={`player-${index}`}
-            disabled={friendOpening ? !friendCanAct || (isShield(card) ? !(canChooseShield || (isJack(card) && canSpy) || (isQueen(card) && canDoubleAttack)) : isSpecial(card) ? friendOpening.turn <= 2 || !game.computerField.some(Boolean) : !canDeploy(card) || (!openLanes(game.playerField, "back").length && !hasHandStack(game.playerField, card))) : (tutorialOpening || tutorialGuided) && !canUseHandCard(card)}
+            disabled={friendOpening ? !friendCanAct || (isShield(card) ? !(canChooseShield || (isJack(card) && canSpy) || (isQueen(card) && canDoubleAttack)) : isSpecial(card) ? friendOpening.turn <= 2 || !game.computerField.some(Boolean) : !canDeploy(card) || (!openLanes(game.playerField, "back").length && !hasHandStack(game.playerField, card) && !(canScurry(card) && openLanes(game.playerField, "front").length))) : (tutorialOpening || tutorialGuided) && !canUseHandCard(card)}
             data-hand-shield-drag={isShield(card) && canDragHandShield || undefined}
             onPointerDown={event => {
               if (isShield(card) && canDragHandShield) beginShieldDrag(event, card);

@@ -5,7 +5,7 @@ Full Stack Web-based version of a custom card game created by two brothers. Buil
 
 - Feedback requires a name and return email. Players preview the public report and submit from the game. The backend associates contact details with the issue number in a private database. Optional diagnostics contain game version and coarse match counts.
 - Sandbox is a **VS Computer** difficulty with a defensive opponent that never attacks. **Training Grounds** is a separate main-menu mode. Its Lab opens during your turn and lets you add or remove cards in either hand or battlefield. Move a card already in play by removing it before adding it elsewhere.
-- Match History keeps up to 12 recent matches in this browser. Turn Timer starts off and is available in match settings. Campaign is a menu placeholder.
+- Match History keeps up to 12 recent matches in this browser. Turn Timer starts off and is available in match settings. Campaign opens an interactive map with nine Coming Soon locations. Edit the `x` and `y` percentages in `src/campaign.ts` to move its location markers.
 - Run `npm run dev` for local play, or `npm run build` for a production build.
 
 ## Enable direct feedback

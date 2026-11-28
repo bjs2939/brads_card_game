@@ -42,6 +42,7 @@ export type PlayerMovement = { step: TurnStep } & (
 );
 
 export type Game = ReturnType<typeof dealSimpleGame> & {
+  tutorialRules?: boolean;
   playerField: (Unit | null)[];
   backRankAtTurnStart: Card[];
   movements?: PlayerMovement[];
@@ -94,6 +95,14 @@ export function cardKey(card: Card) {
 
 export function isNumber(card: Card) {
   return card.type === "standard" && ranks.indexOf(card.rank) <= ranks.indexOf("10");
+}
+
+export function isNimble(card: Card) {
+  return card.type === "standard" && (card.rank === "2" || card.rank === "3");
+}
+
+export function canScurry(card: Card) {
+  return card.type === "standard" && card.rank === "3";
 }
 
 export function isJack(card: Card): card is Extract<Card, { type: "standard" }> {
@@ -235,7 +244,8 @@ export function canDeployThisPhase(game: Game) {
 }
 
 export function hasMoveOutAction(game: Game) {
-  return openLanes(game.playerField, "back").length > 0 && game.player.some(canDeploy);
+  return openLanes(game.playerField, "back").length > 0 && game.player.some(canDeploy) ||
+    !game.tutorialRules && openLanes(game.playerField, "front").length > 0 && game.player.some(canScurry);
 }
 
 export function moveOutOrAttack(game: Game): TurnStep {
@@ -292,6 +302,19 @@ export function deployFromHand(current: Game, card: Card): Game {
     result: current.step === "move-up" ? "Card deployed. Skipped to Move Out." : current.result,
     sound: { cue: "play" },
   };
+}
+
+export function scurryFromHand(game: Game, card: Card, lane: number): Game {
+  if (game.tutorialRules || !canScurry(card) || !game.player.includes(card) ||
+      !canDeployThisPhase(game) || !openLanes(game.playerField, "front").includes(lane)) return game;
+  const playerField = [...game.playerField];
+  playerField[lane] = deploy(card);
+  return { ...game, player: game.player.filter(held => held !== card), playerField,
+    movements: recordMovement(game, { kind: "deploy", step: game.step, card, handIndex: game.player.indexOf(card) }),
+    step: game.step === "move-up" ? "move-out" : game.step,
+    selected: null, selectedShield: null, selectedStack: null, selectedSpecial: null,
+    movingStack: false, movingShield: undefined, result: "Scurry! The Rat reached the front rank.",
+    sound: { cue: "play" } };
 }
 
 export function recordMovement(game: Game, movement: PlayerMovement) {
@@ -382,8 +405,21 @@ export function dropFieldUnit(game: Game, index: number, lane: number, swap = fa
   const matching = !swap && entries.find(entry => canMoveIntoStack(game, index, entry.index));
   if (matching) return stackOnto(game, { from: "field", index }, matching.index);
   if (rankLanes[fieldRank(unit, index)].includes(lane)) return rearrangeRank(game, index, lane);
+  if (fieldRank(unit, index) === "front" && rankLanes.back.includes(lane))
+    return nimbleToBack(game, index, lane);
   return fieldRank(unit, index) === "back" && !entries.length && rankLanes.front.includes(lane)
     ? promoteUnit(game, index, lane) : game;
+}
+
+export function nimbleToBack(game: Game, index: number, lane: number): Game {
+  const unit = game.playerField[index];
+  if (game.tutorialRules || !unit || !isNimble(unit.card) ||
+      !canDeployThisPhase(game) || fieldRank(unit, index) !== "front" ||
+      !openLanes(game.playerField, "back").includes(lane)) return game;
+  const playerField = clearMovementEntries(game.playerField, [{ unit, index }]);
+  playerField[lane] = { ...unit, lane };
+  return { ...game, playerField, selected: null, movingStack: false,
+    result: "Nimble! The troop moved back freely.", sound: { cue: "play" } };
 }
 
 export function unstackDestination(field: Field, index: number) {
@@ -612,7 +648,7 @@ export function attackDefense(field: Field, target: number, defender: Unit, chos
   return { lane, entries, shieldOwner, layers, outer, shieldIndex, card, visibleCard };
 }
 
-export function calculateAttack(field: Field, attackerIndex: number, defender: Card) {
+export function calculateAttack(field: Field, attackerIndex: number, defender: Card, tutorialRules = false) {
   const attacker = field[attackerIndex];
   const entries = attacker ? laneCards(field, laneOf(attacker, attackerIndex)) : [];
   const parts = entries.map(({ unit: { card } }) => {
@@ -622,7 +658,8 @@ export function calculateAttack(field: Field, attackerIndex: number, defender: C
       card.rank === "10" && defender.rank === "2";
     const blocked = suitBlocked || rankBlocked;
     const bonus = !blocked && card.type === "standard" && defender.type === "standard" &&
-      suitAdvantage[card.suit] === defender.suit ? 1 : 0;
+      (suitAdvantage[card.suit] === defender.suit ||
+        !tutorialRules && card.suit === "diamonds" && defender.suit === "diamonds") ? 1 : 0;
     return { card, suitBlocked, rankBlocked, blocked, bonus, power: blocked ? 0 : strength(card) + bonus };
   });
 
@@ -644,7 +681,7 @@ export function makeAttackAnimation(attacker: Unit, target: Card, side: Side, jo
   return { attacker: card, target, side, kind, shield };
 }
 
-export function stackVictimChoices(attackers: Field, attacker: number, defenders: Field, target: number, convert = false) {
+export function stackVictimChoices(attackers: Field, attacker: number, defenders: Field, target: number, convert = false, tutorialRules = false) {
   const defender = defenders[target];
   if (!defender) return [];
   const defense = attackDefense(defenders, target, defender);
@@ -653,7 +690,7 @@ export function stackVictimChoices(attackers: Field, attacker: number, defenders
   const entries = [...defense.entries].sort((a, b) => Number(b.index === target) - Number(a.index === target));
   let plans = [{ victims: [] as number[], cost: 0, power: Infinity }];
   for (const { unit, index } of entries) {
-    const attack = calculateAttack(attackers, attacker, unit.card);
+    const attack = calculateAttack(attackers, attacker, unit.card, tutorialRules);
     if (attack.immune) continue;
     plans = [...plans, ...plans.flatMap(plan => {
       const cost = plan.cost + strength(unit.card);
@@ -668,7 +705,7 @@ export function stackVictimChoices(attackers: Field, attacker: number, defenders
     let pairings = [{ victims: [] as number[], used: [] as number[] }];
     for (const { unit: defender, index } of entries) {
       const eligible = knights.filter(({ unit }) => {
-        const hit = calculateAttack([unit], 0, defender.card);
+        const hit = calculateAttack([unit], 0, defender.card, tutorialRules);
         return !hit.immune && hit.power >= strength(defender.card);
       });
       pairings = [...pairings, ...pairings.flatMap(pairing =>
@@ -694,14 +731,14 @@ export function resolveAttack(game: Game, side: Side, attackerIndex: number, tar
     return game;
   }
 
-  const victims = chosenVictims ?? stackVictimChoices(game[attackerField], attackerIndex, game[defenderField], targetIndex, convert)[0];
+  const victims = chosenVictims ?? stackVictimChoices(game[attackerField], attackerIndex, game[defenderField], targetIndex, convert, game.tutorialRules)[0];
   targetIndex = victims?.[0] ?? targetIndex;
   const defender = game[defenderField][targetIndex]!;
   const blast = defender.card.type === "joker";
   const survivesBlast = blast && attacker.card.type === "standard" && attacker.card.rank === "5";
   const { lane: defenderLane, entries: defendedLane, shieldOwner, layers, outer, shieldIndex, card: defendedCard } =
     attackDefense(game[defenderField], targetIndex, defender, chosenShield);
-  const attack = calculateAttack(game[attackerField], attackerIndex, defendedCard);
+  const attack = calculateAttack(game[attackerField], attackerIndex, defendedCard, game.tutorialRules);
   const immune = attack.immune;
   const suitImmune = immune && attack.parts.some(part => part.suitBlocked);
   const rankImmune = immune && attack.parts.some(part => part.rankBlocked);
@@ -934,7 +971,9 @@ export function useShieldAbility(game: Game, card: Card): Game {
     revealed++;
     return { ...entry, revealed: true };
   };
-  const computerField = spent.computerField.map(unit => unit && ({ ...reveal(unit), shields: unit.shields?.map(reveal) }));
+  const computerField = spent.computerField.map(unit => unit && (
+    !game.tutorialRules && unit.card.type === "standard" && unit.card.rank === "5"
+      ? unit : { ...reveal(unit), shields: unit.shields?.map(reveal) }));
   return {
     ...spent, computerField, phase: "computer", movements: undefined, extraAttack: false,
     result: revealed ? `Spy revealed ${revealed} ${revealed === 1 ? "card" : "cards"}. Turn ended.`

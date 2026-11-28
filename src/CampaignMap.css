@@ -1,0 +1,15 @@
+.campaign-screen { min-height: 100vh; box-sizing: border-box; padding: .7rem; color: #f5e6c8; background: #171510; font-family: Georgia, serif; display: flex; flex-direction: column; align-items: center; gap: .65rem; }
+.campaign-header { width: min(100%, 1376px); display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.campaign-header h1 { margin: 0; font-size: clamp(1.4rem, 3vw, 2.4rem); }
+.campaign-header p { margin: 0 0 0 auto; }
+.campaign-header button { border: 1px solid #d4af37; border-radius: .45rem; padding: .55rem .85rem; color: #f5e6c8; background: #29251f; cursor: pointer; }
+.campaign-map-frame { position: relative; width: min(100%, 1376px); aspect-ratio: 1376 / 768; margin: auto; box-shadow: 0 1rem 2rem #0008; }
+.campaign-map-art { display: block; width: 100%; height: 100%; object-fit: contain; }
+.campaign-location { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; gap: .12rem; align-items: center; width: clamp(4.4rem, 10.5%, 9rem); padding: .22rem .35rem; border: 2px ridge #d4af37; border-radius: .45rem; color: #f5e6c8; background: #29251fe8; box-shadow: 0 .25rem .5rem #171510c9; font: 700 clamp(.52rem, .9vw, .8rem)/1.05 Georgia, serif; text-align: center; cursor: pointer; transition: transform .16s ease, box-shadow .16s ease, background-color .16s ease; }
+.campaign-location strong { font: inherit; }
+.campaign-location small { font-size: .86em; color: #d4af37; }
+.campaign-location small { color: #d1d5db; }
+.campaign-location:hover, .campaign-location[aria-pressed="true"] { transform: translate(-50%, -50%) scale(1.08); background: #403623; box-shadow: 0 0 .8rem #ffe08a, 0 .25rem .5rem #171510c9; }
+.campaign-location:focus-visible, .campaign-header button:focus-visible { outline: 3px solid #ffe08a; outline-offset: 2px; }
+.campaign-selection { margin: .1rem 0; text-align: center; }
+@media (max-width: 700px) { .campaign-screen { min-height: 100vh; } .campaign-map-frame { width: 100%; } .campaign-header p { margin-left: 0; } .campaign-location { width: 10%; padding: .12rem; font-size: clamp(.28rem, 1.3vw, .56rem); border-width: 1px; } }
