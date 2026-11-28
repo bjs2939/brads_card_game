@@ -958,7 +958,7 @@
   width: min(63.25px, 75.9%);
 }
 .card-pegasus-rider-overlay {
-  width: min(60.5px, 72.6%);
+  width: min(69.6px, 83.5%);
 }
 .card-unicorn-lancer-overlay {
   width: min(70px, 82%);
@@ -2140,3 +2140,4 @@ button.simple-game-shield-card:is(:hover, :focus-visible, [aria-pressed="true"])
   outline: 2px solid #fff2ba;
   outline-offset: 3px;
 }
+
