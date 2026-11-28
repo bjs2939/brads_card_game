@@ -60,6 +60,8 @@ test("production room handler shares settings while protecting both seats", asyn
     assert.equal((await send("POST", move, { action: "end-turn", revision: 0 }, host.token)).status, 409);
     const stored = JSON.parse(db.prepare("SELECT opening FROM friend_matches").get().opening);
     stored.hands.guest[0] = { type: "standard", rank: "6", suit: "hearts" };
+    stored.hands.guest[1] = { type: "standard", rank: "Q", suit: "hearts" };
+    stored.hands.host[0] = { type: "standard", rank: "2", suit: "diamonds" };
     db.prepare("UPDATE friend_matches SET opening = ?").run(JSON.stringify(stored));
     const deployed = await send("POST", move, { action: "deploy", index: 0, revision: 0 }, guest.token);
     assert.equal(deployed.status, 200);
@@ -68,14 +70,32 @@ test("production room handler shares settings while protecting both seats", asyn
     assert.equal(opponent.opponentDeployed, 1);
     assert.deepEqual(opponent.deployed, []);
     assert.equal((await send("POST", move, { action: "end-turn", revision: 0 }, guest.token)).status, 409);
-    const ended = await send("POST", move, { action: "end-turn", revision: 1 }, guest.token);
-    assert.equal(ended.status, 200);
+    const shield = await send("POST", move, { action: "shield", index: 0, target: 3, revision: 1 }, guest.token);
+    assert.equal(shield.status, 200);
+    assert.deepEqual((await shield.json()).opening.shields[0][0].card, stored.hands.guest[1]);
+    const shieldObserver = (await (await send("GET", [host.code], undefined, host.token)).json()).opening;
+    assert.deepEqual(shieldObserver.opponentShieldCounts, [1, 0, 0]);
+    assert.deepEqual(shieldObserver.shields, []);
+
+    assert.equal((await send("POST", move, { action: "end-turn", revision: 2 }, guest.token)).status, 200);
     const nextTurn = (await (await send("GET", [host.code], undefined, host.token)).json()).opening;
     assert.equal(nextTurn.turn, 2);
     assert.equal(nextTurn.hand.length, 6);
     assert.equal(nextTurn.deckCount, 42);
-    assert.equal((await send("POST", move, { action: "end-turn", revision: 2 }, host.token)).status, 200);
-    assert.equal((await send("POST", move, { action: "end-turn", revision: 3 }, guest.token)).status, 409);
+    assert.equal((await send("POST", move, { action: "deploy", index: 0, revision: 3 }, host.token)).status, 200);
+    assert.equal((await send("POST", move, { action: "end-turn", revision: 4 }, host.token)).status, 200);
+    assert.equal((await send("POST", move, { action: "promote", index: 3, target: 0, revision: 5 }, host.token)).status, 409);
+    const promoted = await send("POST", move, { action: "promote", index: 3, target: 0, revision: 5 }, guest.token);
+    assert.equal(promoted.status, 200);
+    assert.deepEqual((await promoted.json()).opening.ownField[0].shields[0].card, stored.hands.guest[1]);
+    const attack = await send("POST", move, { action: "attack", index: 0, target: 3, revision: 6 }, guest.token);
+    assert.equal(attack.status, 200);
+    assert.equal((await attack.json()).opening.active, false);
+    const resumed = (await (await send("GET", [host.code], undefined, host.token)).json()).opening;
+    assert.equal(resumed.active, true);
+    assert.equal(resumed.turn, 4);
+    assert.deepEqual(resumed.discardPile, [stored.hands.host[0]]);
+    assert.deepEqual(resumed.attack.attacker, stored.hands.guest[0]);
     db.exec("UPDATE friend_rooms SET expires_at = 0");
     assert.equal((await send("GET", [host.code], undefined, guest.token)).status, 404);
   } finally {

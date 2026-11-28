@@ -57,7 +57,7 @@ export function friendRooms({ now = Date.now } = {}) {
     if (route[2] === "/move" && method === "POST") {
       const seat = token === room.host ? "host" : room.guest && token === room.guest ? "guest" : null;
       if (!seat || !room.opening) return error(403, "Join the match before making a move.");
-      const next = playFriendOpening(room.opening, seat, body.action, body.index, body.revision);
+      const next = playFriendOpening(room.opening, seat, body.action, body.index, body.revision, body.target, body.shieldIndex);
       if (!next) return error(409, "That move is unavailable. Check the current turn and try again.");
       room.opening = next;
       return reply(200, view(room, seat));

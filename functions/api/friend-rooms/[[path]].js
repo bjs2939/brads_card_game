@@ -92,7 +92,7 @@ export async function onRequest({ request, env, params }) {
       ).bind(code, now, token, token).first();
       if (!room) return error(403, "Join the match before making a move.");
       const seat = token === room.host_token ? "host" : "guest";
-      const next = playFriendOpening(JSON.parse(room.opening), seat, body.action, body.index, body.revision);
+      const next = playFriendOpening(JSON.parse(room.opening), seat, body.action, body.index, body.revision, body.target, body.shieldIndex);
       if (!next) return error(409, "That move is unavailable. Check the current turn and try again.");
       const opening = JSON.stringify(next);
       const saved = await db.prepare("UPDATE friend_matches SET opening = ? WHERE room_code = ? AND opening = ? RETURNING opening")

@@ -14,16 +14,31 @@ const characters: Partial<Record<Rank, { sprite: string; className: string; size
 };
 
 const suitSprites: Partial<Record<Rank, Partial<Record<Suit, string>>>> = {
-  "8": { clubs: "unicorn-lancer-8-clubs", spades: "dark-rider-9-spades" },
+  "8": { clubs: "unicorn-lancer-8-clubs", spades: "dark-rider-9-spades", diamonds: "pegasus-rider-8-diamonds" },
   "9": {
     hearts: "flame-swordsman-9-hearts",
-    clubs: "spear-warrior-9-clubs",
+    clubs: "spear-warrior-9-clubs-steady",
     spades: "axe-warrior-9-spades",
     diamonds: "wizard-9-diamonds",
   },
 };
 
-export default function CardFace({ card, faceDown = false }: { card?: Card; faceDown?: boolean }) {
+function cardSprite(card?: Card, attachedShield = false) {
+  const suitSprite = card?.type === "standard" ? suitSprites[card.rank]?.[card.suit] : undefined;
+  return !card ? undefined
+    : card.type === "joker" ? { sprite: "joker-bomb", className: "card-ranger-overlay", size: 50 }
+    : suitSprite
+      ? { sprite: suitSprite, className: suitSprite === "unicorn-lancer-8-clubs" ? "card-unicorn-lancer-overlay" : "card-ranger-overlay", size: 60 }
+      : !attachedShield && (card.rank === "J" || card.rank === "Q")
+        ? { sprite: "shield-jq", className: "", size: 32 } : characters[card.rank];
+}
+
+export function BattlePiece({ card }: { card: Card }) {
+  const sprite = cardSprite(card);
+  return sprite ? <img className="battle-piece" src={`${import.meta.env.BASE_URL}assets/effects/${sprite.sprite}.gif`} alt="" /> : <CardFace card={card} />;
+}
+
+export default function CardFace({ card, faceDown = false, attachedShield = false }: { card?: Card; faceDown?: boolean; attachedShield?: boolean }) {
   const label = card?.type === "joker"
     ? `${card.color} joker`
     : card && `${faceRanks[card.rank] ?? card.rank} of ${card.suit}`;
@@ -31,15 +46,10 @@ export default function CardFace({ card, faceDown = false }: { card?: Card; face
   const image = faceDown ? "card-back-blue" : label?.replace(/ /g, "-");
   const legendary = !faceDown && card?.type === "standard" && card.rank === "9";
   const dragon = !faceDown && card?.type === "standard" && card.rank === "10";
-  const suitSprite = card?.type === "standard" ? suitSprites[card.rank]?.[card.suit] : undefined;
-  const character = faceDown || !card ? undefined
-    : card.type === "joker" ? { sprite: "joker-bomb", className: "card-ranger-overlay", size: 50 }
-    : suitSprite
-      ? { sprite: suitSprite, className: suitSprite === "unicorn-lancer-8-clubs" ? "card-unicorn-lancer-overlay" : "card-ranger-overlay", size: 60 }
-      : characters[card.rank];
+  const character = faceDown ? undefined : cardSprite(card, attachedShield);
 
   return (
-    <div data-legendary-card={legendary || undefined} data-dragon-card={dragon || undefined} data-blue-rider={character?.sprite === "dark-rider-9-spades" || undefined} data-fiery-spartan={character?.sprite === "spear-warrior-9-clubs" || undefined} style={{ width: "100%", aspectRatio: "5 / 7", position: "relative" }}>
+    <div data-legendary-card={legendary || undefined} data-dragon-card={dragon || undefined} data-blue-rider={character?.sprite === "dark-rider-9-spades" || undefined} data-fiery-spartan={character?.sprite === "spear-warrior-9-clubs-steady" || undefined} style={{ width: "100%", aspectRatio: "5 / 7", position: "relative" }}>
       {image ? (
         <img key={image} draggable={false}
           src={`${import.meta.env.BASE_URL}assets/cards/${image}.png`}

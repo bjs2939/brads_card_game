@@ -1183,6 +1183,7 @@
   width: var(--target-size);
   position: relative;
 }
+.battle-piece { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; image-rendering: pixelated; }
 .attack-cutaway-impact {
   animation: ranger-card-impact 400ms 1440ms both;
 }
@@ -1943,44 +1944,7 @@
   perspective: 32rem;
 }
 .match-coin-area .match-setup-result { min-height: 1.25em; }
-.match-coin-toss { width: 3.8rem; height: 3.8rem; }
-.match-coin-toss[data-flipping] { animation: match-coin-toss 1100ms ease-out both; }
-.match-coin {
-  --coin-landing: 1080deg;
-  position: relative;
-  width: 100%;
-  height: 100%;
-  transform-style: preserve-3d;
-}
-.match-coin[data-tails] { --coin-landing: 1260deg; transform: rotateX(180deg); }
-.match-coin-toss[data-flipping] .match-coin { animation: match-coin-spin 1100ms ease-out both; }
-.match-coin-face {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  border: 3px double #fff0a1;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #ffe8a0, #d38d32 68%, #925019);
-  box-shadow: inset 0 0 0 3px #ae682a, 0 0.2rem 0.45rem #0008;
-  color: #673611;
-  font: 800 1.8rem/1 Georgia, serif;
-  backface-visibility: hidden;
-}
-.match-coin-tails {
-  transform: rotateX(180deg);
-  background: radial-gradient(circle at 65% 30%, #fff2b6, #c8822c 72%, #7c431a);
-}
-@keyframes match-coin-toss {
-  0%, 100% { transform: translateY(0); }
-  44% { transform: translateY(-2.05rem); }
-  86% { transform: translateY(0); }
-  93% { transform: translateY(-0.22rem); }
-}
-@keyframes match-coin-spin {
-  from { transform: rotateX(0deg); }
-  to { transform: rotateX(var(--coin-landing)); }
-}
+.match-coin-toss { width: 4.5rem; height: 4.5rem; image-rendering: pixelated; }
 
 button.simple-game-shield-card {
   touch-action: none;

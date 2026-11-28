@@ -1,13 +1,19 @@
 import { useEffect, useState } from "react";
+import MatchCoin, { COIN_FLIP_MS } from "./MatchCoin";
 import type { Card } from "./game_engine/types";
 
+import type { Field, ShieldLayer, TurnStep, Unit, Game } from "./game_engine/battle";
+
+export type FriendAction = "deploy" | "shield" | "end-turn" | "next" | "promote" | "rearrange" | "stack-hand" | "stack-field" | "attack" | "convert" | "special" | "castle" | "retreat" | "collect" | "undo" | "transfer";
+type EnemyUnit = Omit<Unit, "card" | "shields"> & { card?: Card; shields?: { card?: Card; revealed: boolean }[] };
+type FriendBattleView = { attack?: NonNullable<Game["attackAnimation"]> & { at: number }; recoveredDiscard?: Game["recoveredDiscard"]; recovery?: boolean; ownField?: Field; enemyField?: (EnemyUnit | null)[]; step?: TurnStep; active?: boolean; discardPile?: Card[]; result?: string; outcome?: "victory" | "defeat" | "draw" };
 type FirstTurn = "flip" | "host" | "guest";
-export type FriendOpeningView = { hand: Card[]; opponentCardCount: number; deckCount: number; goesFirst: boolean; opponentName: string; code: string; turn: number; revision: number; canAct: boolean; deployed: Card[]; opponentDeployed: number };
+export type FriendOpeningView = FriendBattleView & { hand: Card[]; opponentCardCount: number; deckCount: number; goesFirst: boolean; opponentName: string; code: string; turn: number; revision: number; canAct: boolean; deployed: Card[]; opponentDeployed: number; shields?: ShieldLayer[][]; opponentShieldCounts?: number[]; ownField?: Field; active?: boolean };
 type Room = {
   code: string;
   seat: "host" | "guest";
   ready: boolean;
-  opening?: { firstSeat: "host" | "guest"; hand: Card[]; opponentCardCount: number; deckCount: number; turn: number; revision: number; deployed: Card[]; opponentDeployed: number };
+  opening?: FriendBattleView & { firstSeat: "host" | "guest"; hand: Card[]; opponentCardCount: number; deckCount: number; turn: number; revision: number; deployed?: Card[]; opponentDeployed?: number; shields?: ShieldLayer[][]; opponentShieldCounts?: number[]; ownField?: Field; active?: boolean };
   hostName: string;
   guestName?: string;
   settings: { firstTurn: FirstTurn; jokers: number; timer: boolean };
@@ -31,12 +37,12 @@ function matchView(room: Room): FriendOpeningView | undefined {
   if (!room.opening) return;
   const { firstSeat, ...opening } = room.opening;
   const goesFirst = firstSeat === room.seat;
-  return { ...opening, code: room.code, goesFirst,
-    canAct: opening.turn === (goesFirst ? 1 : 2),
+  return { ...opening, deployed: opening.deployed ?? [], opponentDeployed: opening.opponentDeployed ?? 0, code: room.code, goesFirst,
+    canAct: opening.active ?? (opening.turn === (goesFirst ? 1 : 2)),
     opponentName: (room.seat === "host" ? room.guestName : room.hostName) ?? "Opponent" };
 }
 
-export async function syncFriendMatch(code: string, move?: { action: "deploy" | "end-turn"; index?: number; revision: number }) {
+export async function syncFriendMatch(code: string, move?: { action: FriendAction; index?: number; target?: number; shieldIndex?: number; revision: number }) {
   const token = sessionStorage.getItem("friend-room:" + code);
   const headers = { Authorization: "Bearer " + token };
   return matchView(await roomRequest("/" + code + (move ? "/move" : ""), move ? {
@@ -76,10 +82,26 @@ export default function FriendLobby({ playerName, onMatch }: { playerName: strin
     return () => { controller.abort(); window.clearInterval(timer); };
   }, [activeCode, credentialKey, validCode, busy]);
 
+  const [shownFlip, setShownFlip] = useState("");
+  const [landedFlip, setLandedFlip] = useState("");
+  const flipKey = room?.opening?.turn === 1 && room.settings.firstTurn === "flip"
+    ? "friend-coin:" + room.code : "";
+  const showingFlip = !!flipKey && shownFlip !== flipKey && !sessionStorage.getItem(flipKey);
+
+  useEffect(() => {
+    if (!showingFlip) return;
+    const landing = window.setTimeout(() => setLandedFlip(flipKey), COIN_FLIP_MS);
+    const timer = window.setTimeout(() => {
+      sessionStorage.setItem(flipKey, "shown");
+      setShownFlip(flipKey);
+    }, COIN_FLIP_MS + 650);
+    return () => { window.clearTimeout(landing); window.clearTimeout(timer); };
+  }, [flipKey, showingFlip]);
+
   useEffect(() => {
     const opening = room && matchView(room);
-    if (opening) onMatch(opening);
-  }, [room, onMatch]);
+    if (opening && !showingFlip) onMatch(opening);
+  }, [room, onMatch, showingFlip]);
 
   async function enter(join: boolean) {
     setBusy(true);
@@ -158,7 +180,12 @@ export default function FriendLobby({ playerName, onMatch }: { playerName: strin
 
   return (
     <div className="friend-lobby">
-      {room ? (
+      {showingFlip && room?.opening ? (
+        <div className="match-coin-area">
+          <MatchCoin flipping={landedFlip !== flipKey} tails={room.opening.firstSeat === "guest"} />
+          <p className="match-setup-result" role="status">{landedFlip !== flipKey ? "Flipping coin…" : room.opening.firstSeat === room.seat ? "You go first." : "Your friend goes first."}</p>
+        </div>
+      ) : room ? (
         <>
           <p>{room.ready ? "Both players joined." : "Waiting for your friend to join…"}</p>
           <p>Host: {room.hostName}{room.guestName && <> · Guest: {room.guestName}</>}</p>

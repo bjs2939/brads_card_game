@@ -43,7 +43,8 @@
 }
 .game-home-content p { color: #d8dfc9; line-height: 1.5; }
 .game-home-actions { display: grid; gap: 0.65rem; margin-top: 1.5rem; }
-.game-home button {
+.game-home button,
+.match-setup .game-mode-options button {
   padding: 0.75rem 1rem;
   border: 1px solid #9b855e;
   border-radius: 0.5rem;
@@ -53,9 +54,12 @@
   cursor: pointer;
 }
 .game-home button:hover:not(:disabled) { filter: brightness(1.16); }
-.game-home button:focus-visible { outline: 2px solid #ffe8a8; outline-offset: 3px; }
-.game-home button:disabled { opacity: 0.55; cursor: default; }
-.game-home .game-home-primary { color: #2a1c10; background: #eac47c; border-color: #ffe2a8; }
+.game-home button:focus-visible,
+.match-setup .game-mode-options button:focus-visible { outline: 2px solid #ffe8a8; outline-offset: 3px; }
+.game-home button:disabled,
+.match-setup .game-mode-options button:disabled { opacity: 0.55; cursor: default; }
+.game-home .game-home-primary,
+.match-setup .game-mode-options .game-home-primary { color: #2a1c10; background: #eac47c; border-color: #ffe2a8; }
 .game-home .game-home-music { margin-top: 1rem; padding: 0.4rem 0.65rem; background: transparent; }
 @media (max-width: 670px) {
   .game-home-panel { grid-template-columns: 1fr; gap: 0.75rem; text-align: center; }
@@ -84,6 +88,7 @@
   border-color: #ffe2a8;
   filter: none;
 }
+.match-setup .game-mode-options .game-home-primary:hover:not(:disabled) { filter: brightness(1.12); }
 .game-mode-options small { font-size: 0.72em; font-weight: 500; }
 .game-home .game-mode-back { margin-top: 1rem; background: transparent; }
 

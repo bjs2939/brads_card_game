@@ -4,7 +4,7 @@ import CardFace from "./CardFace";
 import { Feedback, MatchHistory, gameVersion } from "./PlaytestPanels";
 import SimpleGame, { difficulties, simpleVersionTitle, type Difficulty } from "./SimpleGame";
 import { useBackgroundMusic } from "./useGameSound";
-import FriendLobby, { inviteCode, syncFriendMatch, type FriendOpeningView } from "./FriendLobby";
+import FriendLobby, { inviteCode, syncFriendMatch, type FriendAction, type FriendOpeningView } from "./FriendLobby";
 import "./Homepage.css";
 
 const difficultyDescriptions: Record<Difficulty, string> = {
@@ -66,9 +66,9 @@ export default function HomePage() {
     return () => { active = false; window.clearInterval(timer); };
   }, [friendCode]);
 
-  async function moveFriend(action: "deploy" | "end-turn", index?: number) {
+  async function moveFriend(action: FriendAction, index?: number, target?: number, shieldIndex?: number) {
     if (!friendOpening) return;
-    const state = await syncFriendMatch(friendOpening.code, { action, index, revision: friendOpening.revision });
+    const state = await syncFriendMatch(friendOpening.code, { action, index, target, shieldIndex, revision: friendOpening.revision });
     if (state) setFriendOpening(current => current?.code === state.code && state.revision > current.revision ? state : current);
   }
 
