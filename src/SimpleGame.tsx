@@ -1379,6 +1379,8 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const lightningReveal = revealedEffectCards?.some(card => card.type === "standard" && card.rank === "9") ? revealedEffectCards : undefined;
   const unlockSound = useGameSound(game, soundEnabled && !paused, showingCombatEffect ? null : outcome, lightningReveal);
   const draggedCard = useRef<DraggedCard | null>(null);
+  const canDragHandShield = canChooseShield && !warningActive &&
+    (friendOpening ? friendCanAct : !paused);
   const shieldDrag = useRef<{ card: Card; pointer: number; x: number; y: number; moved: boolean; transfer?: ShieldTransfer } | null>(null);
   const suppressShieldClick = useRef(false);
   const [shieldDragPreview, setShieldDragPreview] = useState<{ card: Card; x: number; y: number; target?: number }>();
@@ -1414,12 +1416,16 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     suppressShieldClick.current = true;
     if (event.type !== "pointerup") return;
     const target = shieldSlotAt(event.clientX, event.clientY);
-    if (target !== undefined) {
-      setGame(current => {
-        if (!canDeployThisPhase(current)) return current;
-        return drag.transfer ? transferPlayerShield(current, drag.transfer, target) : equipShield(current, drag.card, target);
-      });
+    if (target === undefined) return;
+    if (friendOpening) {
+      const index = game.player.indexOf(drag.card);
+      if (index !== -1) void sendFriendMove("shield", index, target);
+      return;
     }
+    setGame(current => {
+      if (!canDeployThisPhase(current)) return current;
+      return drag.transfer ? transferPlayerShield(current, drag.transfer, target) : equipShield(current, drag.card, target);
+    });
   }
 
   const canDeployFromHand = canDeployThisPhase(game) && hasOpenLane;
@@ -2624,7 +2630,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       onPick={!isComputer && !showingCombatEffect && !game.pendingAttack && !game.selectedSpecial ? pickUnit : undefined}
       canPick={canPickOwnUnit}
       movingShield={canReallocateShields ? game.movingShield : undefined}
-      allowShieldDrop={canReallocateShields}
+      allowShieldDrop={canReallocateShields || (!!friendOpening && canDragHandShield)}
       shieldDropTarget={shieldDragPreview?.target}
       onStartShieldDrag={canReallocateShields ? (event, transfer) => beginShieldDrag(event, transfer.layer.card, transfer) : undefined}
       onMoveShieldTo={canReallocateShields && game.movingShield ? index => {
@@ -3355,9 +3361,9 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             key={cardKey(card)}
             data-card-position={`player-${index}`}
             disabled={friendOpening ? !friendCanAct || (isShield(card) ? !game.playerField.some(canShield) : isSpecial(card) ? friendOpening.turn <= 2 || !game.computerField.some(Boolean) : !canDeploy(card) || (!openLanes(game.playerField, "back").length && !hasHandStack(game.playerField, card))) : (tutorialOpening || tutorialGuided) && !canUseHandCard(card)}
-            data-hand-shield-drag={isShield(card) && canChooseShield && !paused && !warningActive || undefined}
+            data-hand-shield-drag={isShield(card) && canDragHandShield || undefined}
             onPointerDown={event => {
-              if (isShield(card) && canChooseShield && !paused && !warningActive) beginShieldDrag(event, card);
+              if (isShield(card) && canDragHandShield) beginShieldDrag(event, card);
             }}
             draggable={canDragHandCard(card)}
             onDragStart={canDragHandCard(card) ? event => {
