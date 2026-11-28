@@ -16,7 +16,7 @@ import {
   isShield, hasFourShield, canShield, deploy, strength,
   canStack, matchesStack, isSpecial, laneOf, laneCards,
   canMoveIntoStack, addToStack, fieldRank, hasBackRankCards, canAttackTarget,
-  canAttackFrom, attackRestricted, isRanger, isHolyKnight, castleAttackerIndex,
+  canAttackFrom, attackRestricted, visibleConvertRecovery, isRanger, isHolyKnight, castleAttackerIndex,
   openLanes, canMoveUp, canDeployThisPhase, hasMoveOutAction, moveOutOrAttack,
   nextPlayerStep, advancePlayerStep, hasHandStack, openingPlaysExhausted, deployFromHand,
   undoPlayerMovement, moveUp, rearrangeRank, dropFieldUnit, unstackDestination, unstackUnit, preferredPromotionLane, promoteUnit,
@@ -63,7 +63,7 @@ const compactBoardQuery = "(max-width: 720px)";
 
 const battlefieldLayout = {
   ...handLayout,
-  gridTemplateColumns: `repeat(${slotsPerRank}, minmax(0, var(--field-card-width)))`,
+  gridTemplateColumns: `repeat(${slotsPerRank}, minmax(0, var(--field-lane-width)))`,
 };
 
 function isTutorialFive(card: Card) {
@@ -623,7 +623,7 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
               <div className="simple-game-stack-cards">
                 {entries.map(({ unit, index }) => {
                   const faceDown = !unit.revealed;
-                  const recovering = recoveringKnights?.includes(unit.card);
+                  const recovering = recoveringKnights?.some(card => cardKey(card) === cardKey(unit.card));
                   const visible = opponent && faceDown ? null : unit.card;
                   const pickable = !!onPick && (!canPick || canPick(unit, index));
                   const horizontalFour = !faceDown && hasFourShield(unit);
@@ -711,7 +711,7 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
                       onDragOver={onDrop ? event => event.preventDefault() : undefined}
                       onDrop={onDrop ? event => { event.preventDefault(); onDrop(index, event.shiftKey); } : undefined}
                     >
-                      {revealedEffectCards?.includes(unit.card) && <BattlefieldRevealEffect card={unit.card} />}
+                      {revealedEffectCards?.some(card => cardKey(card) === cardKey(unit.card)) && <BattlefieldRevealEffect card={unit.card} />}
                       {pickable || onInspect ? (
                         <button
                           data-touch-rearrange={onTouchRearrange && canDrag?.(index) ? true : undefined}
@@ -860,13 +860,13 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       selected: null, pendingAttack: undefined, movingShield: undefined,
       discardPile: friendOpening.discardPile ?? [], result: friendOpening.result ?? "",
       attackAnimation: friendOpening.attack && Date.now() - friendOpening.attack.at < 5000 ? friendOpening.attack : undefined,
+      specialStrike: friendOpening.specialStrike && Date.now() - friendOpening.specialStrike.at < 2000 ? friendOpening.specialStrike : undefined,
       jokerExplosion: friendOpening.jokerExplosion && Date.now() - friendOpening.jokerExplosion.at < 5000 ? friendOpening.jokerExplosion : undefined,
       recoveredDiscard: friendOpening.recoveredDiscard,
       spyFlash: friendOpening.spy && Date.now() - friendOpening.spy.at < 5000 ? friendOpening.spy.card : undefined,
       extraAttack: friendOpening.doubleAttack === 2,
       queenAttackTurn: friendOpening.doubleAttack ? friendOpening.turn : undefined,
-      convertRecovery: friendOpening.recovery ? { player: { turn: friendOpening.turn, knights: friendOpening.ownField?.flatMap(unit =>
-        unit && isHolyKnight(unit.card) && unit.revealed ? [unit.card] : []) ?? [] } } : undefined,
+      convertRecovery: friendOpening.convertRecovery,
       playerField: friendOpening.ownField ?? [null, null, null, ...friendOpening.deployed.map((card, lane) => ({
         ...deploy(card), shields: friendOpening.shields?.[lane],
       }))],
@@ -1128,7 +1128,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     setInspection({ card, round: game.round });
   }
   const latestDiscard = game.discardPile[game.discardPile.length - 1];
-  const board = useCardMotion(game);
+  const board = useCardMotion(game, !friendOpening);
   const modeLabel = friendOpening ? "VS Friend" : tutorial ? "Tutorial · Easy" : trainingGrounds ? "Training Grounds" : `VS Computer · ${difficulty}`;
   useEffect(() => {
     if (game.turn <= 1 && !outcome) return;
@@ -1188,7 +1188,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   }, [showingCombatEffect, soundEnabled, setDucked]);
   useEffect(() => {
     const strike = game.specialStrike;
-    if (!strike || paused) return;
+    if (!strike || (paused && !friendOpening)) return;
 
     const timer = window.setTimeout(() => {
       setGame(current => current.specialStrike === strike ? {
@@ -1201,7 +1201,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       } : current);
     }, 2000);
     return () => window.clearTimeout(timer);
-  }, [game.specialStrike, paused, tutorial, seenLessons]);
+  }, [game.specialStrike, paused, friendOpening, tutorial, seenLessons]);
 
   useEffect(() => {
     const flash = game.spyFlash;
@@ -1371,7 +1371,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const previousRevealField = useRef({ round: game.round, player: game.playerField, computer: game.computerField });
   const [revealedEffectCards, setRevealedEffectCards] = useState<readonly Card[]>();
   useEffect(() => {
-    if (paused) return;
+    if (paused && !friendOpening) return;
     const before = previousRevealField.current;
     previousRevealField.current = { round: game.round, player: game.playerField, computer: game.computerField };
     if (before.round !== game.round) {
@@ -1382,13 +1382,13 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     const current = [...game.playerField, ...game.computerField];
     const revealed = current.flatMap(unit =>
       unit?.revealed && hasRevealEffect(unit.card) &&
-        previous.some(old => old?.card === unit.card && !old.revealed) ? [unit.card] : []);
+        previous.some(old => old && cardKey(old.card) === cardKey(unit.card) && !old.revealed) ? [unit.card] : []);
     const defeated = game.attackAnimation?.target;
     if (hasRevealEffect(defeated) &&
-        !current.some(unit => unit?.card === defeated) &&
-        previous.some(unit => unit?.card === defeated && !unit.revealed)) revealed.push(defeated);
+        !current.some(unit => unit && cardKey(unit.card) === cardKey(defeated)) &&
+        previous.some(unit => unit && cardKey(unit.card) === cardKey(defeated) && !unit.revealed)) revealed.push(defeated);
     if (revealed.length) setRevealedEffectCards(revealed);
-  }, [game.round, game.playerField, game.computerField, game.attackAnimation, paused]);
+  }, [game.round, game.playerField, game.computerField, game.attackAnimation, paused, friendOpening]);
   useEffect(() => {
     if (!revealedEffectCards) return;
     const timer = window.setTimeout(() => setRevealedEffectCards(undefined), 1600);
@@ -1396,7 +1396,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   }, [revealedEffectCards]);
 
   const lightningReveal = revealedEffectCards?.some(card => card.type === "standard" && card.rank === "9") ? revealedEffectCards : undefined;
-  const unlockSound = useGameSound(game, soundEnabled && !paused, showingCombatEffect ? null : outcome, lightningReveal);
+  const unlockSound = useGameSound(game, soundEnabled && (!paused || !!friendOpening), showingCombatEffect ? null : outcome, lightningReveal);
   const draggedCard = useRef<DraggedCard | null>(null);
   const canDragHandShield = canChooseShield && !warningActive &&
     (friendOpening ? friendCanAct : !paused);
@@ -2620,7 +2620,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       key={rank}
       units={game.playerField}
       revealedEffectCards={revealedEffectCards}
-      recoveringKnights={offenseRestricted ? game.convertRecovery?.player?.knights : undefined}
+      recoveringKnights={visibleConvertRecovery(game, "player")?.knights}
       highlighted={rank === "back" ? isMovingUp : isAttacking && !skipAttack}
       highlightRanged={rank === "back" && isAttacking && !skipAttack}
       rank={rank}
@@ -2857,7 +2857,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           ))}
         </div>
       </dialog>
-      <dialog ref={convertDialog} className="game-mode-picker" aria-labelledby="holy-knight-title"
+      <dialog ref={convertDialog} className="game-mode-picker holy-knight-dialog" aria-labelledby="holy-knight-title"
         aria-describedby="holy-knight-description" onCancel={event => {
           event.preventDefault();
           setConvertTarget(null);
@@ -2865,15 +2865,15 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
         <h2 id="holy-knight-title">Holy Knight</h2>
         <p id="holy-knight-description">Convert reveals the target stack and its shields. Win to recruit defeated cards or a broken shield into your hand. A successful recruit locks your next turn’s offensive actions.</p>
         <div className="game-mode-options">
-          <button autoFocus onClick={() => {
+          <button type="button" className="holy-knight-regular" autoFocus onClick={() => {
             if (convertTarget !== null) attack(convertTarget, false, undefined, "regular");
             setConvertTarget(null);
           }}>Regular Attack</button>
-          <button onClick={() => {
+          <button type="button" className="holy-knight-convert" onClick={() => {
             if (convertTarget !== null) attack(convertTarget, false, undefined, "convert");
             setConvertTarget(null);
           }}>Convert</button>
-          <button onClick={() => setConvertTarget(null)}>Cancel</button>
+          <button type="button" className="holy-knight-cancel" onClick={() => setConvertTarget(null)}>Cancel</button>
         </div>
       </dialog>
       <dialog ref={immunityDialog} className="game-mode-picker" aria-labelledby="immunity-warning-title"
@@ -2913,10 +2913,8 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
               <>
                 <BattlePiece card={game.attackAnimation.attacker}
                   className="attack-cutaway-sprite" spriteClassName="convert-knight" />
-                <span className="convert-magic-travel" aria-hidden="true">
-                  <span className="convert-magic-frames"
-                    style={{ backgroundImage: `url(${import.meta.env.BASE_URL}assets/effects/holy-knight-convert.png)` }} />
-                </span>
+                <img className="convert-magic-effect" alt="" draggable={false}
+                  src={`${import.meta.env.BASE_URL}assets/effects/holy-knight-convert.gif`} />
               </>
             ) : game.attackAnimation.kind === "card" ? (
               <>
@@ -2931,9 +2929,9 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
               </>
             )}
             <div className="attack-cutaway-target">
-              {revealedEffectCards?.includes(game.attackAnimation.target) &&
-                !game.computerField.some(unit => unit?.card === game.attackAnimation?.target) &&
-                !game.playerField.some(unit => unit?.card === game.attackAnimation?.target) &&
+              {revealedEffectCards?.some(card => cardKey(card) === cardKey(game.attackAnimation!.target)) &&
+                !game.computerField.some(unit => unit && cardKey(unit.card) === cardKey(game.attackAnimation!.target)) &&
+                !game.playerField.some(unit => unit && cardKey(unit.card) === cardKey(game.attackAnimation!.target)) &&
                 <BattlefieldRevealEffect card={game.attackAnimation.target} />}
               <div className={game.attackAnimation.shield ? undefined : "attack-cutaway-impact"}>
                 <BattlePiece card={game.attackAnimation.target} />
@@ -2957,6 +2955,18 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
               )}
             </div>
           </div>
+          {game.attackAnimation.recruited?.length ? (
+            <div className="convert-drawn-cards">
+              {game.attackAnimation.recruited.map(card => (
+                <div className="convert-drawn-card" key={cardKey(card)}>
+                  <div className="convert-drawn-card-art"><CardFace card={card} /></div>
+                  <strong data-suit={card.type === "standard" ? card.suit : undefined}>
+                    {card.type === "standard" ? `${card.rank}${suitSymbols[card.suit]}` : "Joker"} Converted!
+                  </strong>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </aside>
       )}
       {game.jokerExplosion && !game.attackAnimation && (
@@ -3195,7 +3205,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
               key={rank}
               units={game.computerField}
               revealedEffectCards={revealedEffectCards}
-              recoveringKnights={isComputer && attackRestricted(game, "computer") ? game.convertRecovery?.computer?.knights : undefined}
+              recoveringKnights={visibleConvertRecovery(game, "computer")?.knights}
               rank={rank}
               label={(friendOpening?.opponentName ?? "Computer") + " " + rank + " rank"}
               opponent

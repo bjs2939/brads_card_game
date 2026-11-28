@@ -47,6 +47,21 @@ test("a shield-blocked attack ends the attacking seat's turn and identifies it t
   assert.equal(battleForSeat(promoted, "guest").completedAttack, undefined);
 });
 
+test("King and Ace strike effects reach both multiplayer seats", () => {
+  const card = (rank, suit) => ({ type: "standard", rank, suit });
+  for (const rank of ["K", "A"]) {
+    const battle = startFriendBattle({ firstSeat: "host", hands: { host: [card(rank, "hearts")], guest: [] },
+      fields: { guest: [card("5", "spades")] }, drawPile: [card("3", "clubs"), card("4", "diamonds")] });
+    const resolved = playFriendBattle(battle, "host", "special", 0, 3);
+    assert.ok(resolved?.specialStrike);
+    for (const seat of ["host", "guest"]) {
+      const strike = battleForSeat(JSON.parse(JSON.stringify(resolved)), seat).specialStrike;
+      assert.equal(strike.kind, rank === "K" ? "king" : "ace");
+      assert.equal(strike.side, seat === "host" ? "player" : "computer");
+    }
+  }
+});
+
 test("multiplayer can undo recorded deployments and promotions after saving the match", () => {
   const troop = { type: "standard", rank: "5", suit: "spades" };
   const reserve = { ...troop, rank: "8" };
@@ -154,4 +169,24 @@ test("attached Queens grant two attacks and attached Jacks spy then pass the tur
   const last = playFriendBattle(first, "host", "attack", 0, 4);
   assert.equal(last.seat, "guest");
   assert.equal(last.game.turn, armed.game.turn + 1);
+});
+
+test("both seats see the converting Knight recover before and during the restricted turn", () => {
+  const card = (rank, suit) => ({ type: "standard", rank, suit });
+  const knight = card("7", "diamonds");
+  const battle = startFriendBattle({ firstSeat: "host", hands: { host: [], guest: [] },
+    fields: { host: [knight, card("7", "hearts")], guest: [card("3", "spades"), card("6", "clubs")] },
+    drawPile: [card("4", "spades"), card("5", "hearts"), card("8", "hearts"), card("9", "hearts")] });
+  const promoted = playFriendBattle(battle, "host", "promote", 3, 0);
+  const converted = JSON.parse(JSON.stringify(playFriendBattle(promoted, "host", "convert", 0, 3)));
+  const expected = { turn: 5, knights: [knight] };
+  assert.equal(converted.game.turn, 4);
+  assert.deepEqual(battleForSeat(converted, "host").convertRecovery.player, expected);
+  assert.deepEqual(battleForSeat(converted, "guest").convertRecovery.computer, expected);
+  const recovering = playFriendBattle(converted, "guest", "end-turn");
+  assert.deepEqual(battleForSeat(recovering, "host").convertRecovery.player, expected);
+  assert.equal(playFriendBattle(recovering, "host", "attack", 0, 4), null);
+  const recovered = playFriendBattle(recovering, "host", "end-turn");
+  assert.equal(battleForSeat(recovered, "host").convertRecovery.player, undefined);
+  assert.equal(battleForSeat(recovered, "guest").convertRecovery.computer, undefined);
 });

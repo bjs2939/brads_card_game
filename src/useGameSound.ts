@@ -49,6 +49,8 @@ type Noise = [at: number, length: number, gain: number, frequency: number];
 type Effect = { tones?: Tone[]; noise?: Noise[] };
 
 const effects = {
+  bow: { noise: [[0, .12, .08, 2100]] },
+  swish: { noise: [[0, .11, .09, 1600]] },
   spy: { tones: [[330, 0, .13, .07], [523, .095, .14, .075], [660, .19, .2, .08]] },
   "deck-warning": { tones: [[660, 0, .28, .14, "triangle"], [440, .31, .28, .13, "triangle"], [660, .62, .28, .14, "triangle"], [440, .93, .28, .13, "triangle"]] },
   lightning: {
@@ -81,6 +83,11 @@ const effects = {
 export type GameSound = keyof typeof effects;
 
 const recordedSounds = {
+  bow: "effects/bow-release.wav",
+  swish: "effects/weapon-swish.wav",
+  draw: "effects/card-draw.wav",
+  play: "effects/card-play.wav",
+  shuffle: "effects/card-shuffle.wav",
   "deck-warning": "effects/deck-warning.wav",
   lightning: "effects/thunderclap.mp3",
   immunity: "effects/immunity-crash.ogg",
@@ -95,7 +102,7 @@ type SoundState = {
   sound?: { cue: GameSound; lightning?: boolean };
   advantage?: boolean;
   attackAnimation?: { kind: "ranger" | "dragon" | "card" | "convert" };
-  specialStrike?: unknown;
+  specialStrike?: { turn: number; kind: string };
   spyFlash?: unknown;
   recoveredDiscard?: unknown;
   jokerExplosion?: unknown;
@@ -258,9 +265,13 @@ export function useGameSound(game: SoundState, enabled: boolean, outcome: "victo
     const newTurn = old.turn !== game.turn || newRound || strikeFinished;
     if (newRound) play("shuffle");
     if (legendaryStrike) play("lightning", 0.16);
+    if (game.specialStrike && (!old.specialStrike || old.specialStrike.turn !== game.specialStrike.turn ||
+      old.specialStrike.kind !== game.specialStrike.kind) && !game.sound?.lightning) play("lightning", 0.08);
     if (game.sound && game.sound !== old.sound) {
       if (game.sound.lightning) play("lightning", .08);
       if (game.attackAnimation?.kind === "dragon") play("dragon-fire", 1.1);
+      if (game.attackAnimation?.kind === "ranger") play("bow", .12);
+      if (game.attackAnimation?.kind === "card") play("swish", .12);
       play(game.sound.cue, game.attackAnimation ? game.attackAnimation.kind === "card" ? .52 : game.jokerExplosion ? 1.9 : game.attackAnimation.kind === "convert" ? 1.05 : 1.44
         : game.sound.lightning ? .27 : game.sound.cue === "immunity" ? .17 : 0);
     }
@@ -360,6 +371,22 @@ export function useBackgroundMusic(track: Track | null) {
     const { file, volume } = backgroundTracks[which];
     const defaultUrl = `${import.meta.env.BASE_URL}assets/audio/music/${file}`;
     const playlist = which === "battle" ? [defaultUrl, ...battlePlaylist] : [defaultUrl];
+    let previousIndex = -1;
+    let remaining = [] as number[];
+    function nextIndex() {
+      if (!remaining.length) {
+        remaining = playlist.map((_, index) => index);
+        for (let index = remaining.length - 1; index > 0; index--) {
+          const swap = Math.floor(Math.random() * (index + 1));
+          [remaining[index], remaining[swap]] = [remaining[swap], remaining[index]];
+        }
+        if (remaining.length > 1 && remaining.at(-1) === previousIndex) {
+          [remaining[0], remaining[remaining.length - 1]] = [remaining[remaining.length - 1], remaining[0]];
+        }
+      }
+      previousIndex = remaining.pop()!;
+      return previousIndex;
+    }
     gain.gain.value = volume * (ducked.current ? 0.28 : 1);
     void context.resume().catch(() => {});
 
@@ -383,19 +410,19 @@ export function useBackgroundMusic(track: Track | null) {
           source.disconnect();
           if (playback.current !== current) return;
           current.source = undefined;
-          void play((index + 1) % playlist.length);
+          void play(nextIndex());
         };
         source.start();
         current.source = source;
         setEnabled(true);
       } catch {
         if (playback.current !== current) return;
-        if (remainingAttempts > 1) void play((index + 1) % playlist.length, remainingAttempts - 1);
+        if (remainingAttempts > 1) void play(nextIndex(), remainingAttempts - 1);
         else stopMusic();
       }
     }
 
-    void play(0);
+    void play(nextIndex());
   }, [canPlayAudio, stopMusic]);
 
   function toggle() {

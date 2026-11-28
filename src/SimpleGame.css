@@ -33,7 +33,7 @@
 
 .simple-game-board {
   display: grid;
-  grid-template-columns: minmax(0, 9rem) minmax(0, 22rem) minmax(0, 10rem);
+  grid-template-columns: minmax(0, 9rem) minmax(0, 32rem) minmax(0, 10rem);
   justify-content: center;
   align-items: start;
   gap: clamp(0.35rem, 2vw, 1.5rem);
@@ -117,6 +117,7 @@
   box-sizing: border-box;
   --hand-card-width: clamp(4rem, 11.5vh, 6.5rem);
   --field-card-width: clamp(4.4rem, 12.5vh, 6.75rem);
+  --field-lane-width: calc(var(--field-card-width) * 1.4);
   padding: clamp(0.5rem, 2vw, 1.1rem);
   text-align: center;
   color: #e9f3ff;
@@ -174,7 +175,8 @@
 .simple-game-shield-card {
   position: absolute;
   z-index: 3;
-  inset: auto 0 0;
+  inset: auto auto 0 -20%;
+  width: 140%;
   aspect-ratio: 7 / 5;
   pointer-events: none;
 }
@@ -227,6 +229,8 @@
 
 .simple-game-stack {
   min-width: 0;
+  width: 71.4286%;
+  justify-self: center;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -366,7 +370,8 @@
 .four-shield-card {
   position: relative;
   display: block;
-  width: 100%;
+  width: 140%;
+  margin-left: -20%;
   aspect-ratio: 7 / 5;
 }
 .four-shield-art {
@@ -546,7 +551,8 @@
   display: grid;
   place-items: center;
   align-self: start;
-  width: 100%;
+  justify-self: center;
+  width: 71.4286%;
   aspect-ratio: 5 / 7;
   box-sizing: border-box;
   padding: 0.2rem;
@@ -695,7 +701,8 @@
 .attached-shields-separate {
   display: block;
   position: relative;
-  width: 100%;
+  width: 140%;
+  margin-left: -20%;
   aspect-ratio: 7 / 5;
   box-sizing: content-box;
   margin-top: 0.18rem;
@@ -946,6 +953,12 @@
 }
 .card-ranger-overlay {
   width: min(55px, 66%);
+}
+.card-heart-dragon-overlay {
+  width: min(63.25px, 75.9%);
+}
+.card-pegasus-rider-overlay {
+  width: min(60.5px, 72.6%);
 }
 .card-unicorn-lancer-overlay {
   width: min(70px, 82%);
@@ -1839,7 +1852,10 @@
 .convert-status-top { width: min(34rem, 100%); margin-inline: auto; box-sizing: border-box; }
 .convert-status strong { color: #ffd98f; font-size: 1rem; }
 .simple-game-stack-card[data-convert-recovering] > button:not(.simple-game-shield-card) {
-  transform: rotate(90deg) scale(0.69);
+  display: block;
+  width: 140% !important;
+  margin-left: -20%;
+  transform: rotate(90deg) scale(0.714286);
 }
 .recovering-knight-label {
   position: absolute;
@@ -1993,45 +2009,43 @@ button.simple-game-shield-card:is(:hover, :focus-visible, [aria-pressed="true"])
   background: radial-gradient(ellipse at 35% 60%, #5a441d, #241d2e 75%);
 }
 .attack-cutaway--convert .convert-knight { filter: drop-shadow(0 0 0.65rem #ffd1538c); }
-.convert-magic-travel {
+.convert-magic-effect {
   position: absolute;
   z-index: 4;
   top: 50%;
-  left: 12%;
-  width: clamp(4.5rem, 29vw, 8rem);
-  aspect-ratio: 1;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  animation: convert-magic-reach 1750ms ease-in-out both;
-}
-.convert-magic-frames {
-  display: block;
+  left: 0;
   width: 100%;
-  height: 100%;
-  background-size: 800% 100%;
-  background-repeat: no-repeat;
+  transform: translateY(-50%);
+  pointer-events: none;
   image-rendering: pixelated;
   filter: drop-shadow(0 0 0.6rem #ffca46);
-  animation: convert-magic-frames 1750ms steps(7, end) both;
 }
-.attack-cutaway--convert .attack-cutaway-impact {
-  animation: convert-magic-impact 500ms 1050ms ease-out both;
+.attack-cutaway--convert .attack-cutaway-impact { animation: none; }
+.convert-drawn-cards {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  padding-top: 0.35rem;
 }
-@keyframes convert-magic-frames { from { background-position: 0 0; } to { background-position: 100% 0; } }
-@keyframes convert-magic-reach {
-  0% { left: 20%; }
-  58%, 100% { left: 79%; }
-  85% { opacity: 1; }
-  100% { opacity: 0; }
+.convert-drawn-card {
+  display: grid;
+  justify-items: center;
+  gap: 0.3rem;
 }
-@keyframes convert-magic-impact {
-  25% { filter: brightness(1.45) drop-shadow(0 0 0.6rem #ffdc60); transform: translateX(0.22rem); }
+.convert-drawn-card-art {
+  width: clamp(4.25rem, 16vw, 5.5rem);
+  filter: drop-shadow(0 0 0.65rem #ffd572);
 }
-@media (prefers-reduced-motion: reduce) {
-  .convert-magic-travel, .convert-magic-frames, .attack-cutaway--convert .attack-cutaway-impact { animation: none; }
-  .convert-magic-travel { left: 69%; opacity: 0.5; }
-  .convert-magic-frames { background-position: 85.714% 0; }
+.convert-drawn-card strong {
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.4rem;
+  background: #fff0c5;
+  color: #233447;
+  font-size: 0.9rem;
 }
+.convert-drawn-card strong[data-suit="hearts"],
+.convert-drawn-card strong[data-suit="diamonds"] { color: #a42539; }
 
 [data-fiery-spartan] .card-ranger-overlay {
   filter: drop-shadow(0 0.13rem 0.18rem #ff4b0e) drop-shadow(0 0 0.24rem #ff9a28);
@@ -2070,4 +2084,59 @@ button.simple-game-shield-card:is(:hover, :focus-visible, [aria-pressed="true"])
 
 [data-blue-rider] .card-ranger-overlay {
   filter: brightness(1.38) saturate(1.37) drop-shadow(0 0 0.16rem #64b8ffb0);
+}
+
+.holy-knight-dialog .game-mode-options {
+  margin-top: 1.15rem;
+  gap: 0.65rem;
+}
+
+.holy-knight-dialog .game-mode-options button {
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--choice-border);
+  border-radius: 0.55rem;
+  background: var(--choice-background);
+  color: var(--choice-text);
+  font: 750 0.94rem system-ui, sans-serif;
+  text-align: center;
+  box-shadow: inset 0 1px #ffffff22, 0 2px 5px #0004;
+  cursor: pointer;
+}
+
+.holy-knight-dialog .holy-knight-regular {
+  --choice-background: #21445a;
+  --choice-border: #7298b2;
+  --choice-text: #edf8ff;
+  --choice-hover: #a3ddff;
+  --choice-hover-text: #132a3b;
+}
+
+.holy-knight-dialog .holy-knight-convert {
+  --choice-background: #edc371;
+  --choice-border: #fff0b8;
+  --choice-text: #33210d;
+  --choice-hover: #fff2ba;
+  --choice-hover-text: #33210d;
+}
+
+.holy-knight-dialog .holy-knight-cancel {
+  --choice-background: #24363a;
+  --choice-border: #7d9393;
+  --choice-text: #e2eceb;
+  --choice-hover: #f3bac0;
+  --choice-hover-text: #3e1720;
+}
+
+.holy-knight-dialog .game-mode-options button:hover,
+.holy-knight-dialog .game-mode-options button:focus-visible {
+  background: var(--choice-hover);
+  border-color: var(--choice-hover);
+  color: var(--choice-hover-text);
+}
+
+.holy-knight-dialog .game-mode-options button:focus-visible {
+  outline: 2px solid #fff2ba;
+  outline-offset: 3px;
 }

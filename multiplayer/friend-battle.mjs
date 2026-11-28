@@ -2,7 +2,7 @@ import {
   advancePlayerStep, attackDefense, castleAttackerIndex, deploy, deployFromHand, dropFieldUnit, unstackUnit,
   cardKey, drawForTurn, equipShield, makeAttackAnimation, matchOutcome, revealCollectors, isCollector,
   playerStepAfterDraw, preferredPromotionLane, promoteUnit, rearrangeRank, resolveAttack,
-  resolveSpecial, stackOnto, transferPlayerShield, undoPlayerMovement, useShieldAbility, continueDoubleAttack,
+  resolveSpecial, stackOnto, transferPlayerShield, undoPlayerMovement, useShieldAbility, continueDoubleAttack, visibleConvertRecovery,
 } from "../src/game_engine/battle.ts";
 
 const otherSeat = seat => seat === "host" ? "guest" : "host";
@@ -120,18 +120,23 @@ export function playFriendBattle(battle, seat, action, index, target, shieldInde
     return {
       ...passed,
       attack: next.attackAnimation && { ...next.attackAnimation, seat, at },
+      specialStrike: next.specialStrike && { ...next.specialStrike, seat, at },
       jokerExplosion: next.jokerExplosion && { ...next.jokerExplosion, at },
       spy: next.spyFlash && { card: next.spyFlash, at },
       completedAttack: continues ? undefined : { seat, turn: game.turn },
     };
   }
-  return { ...battle, game: { ...next, recoveredDiscard: undefined }, attack: undefined, jokerExplosion: undefined, spy: undefined, completedAttack: undefined };
+  return { ...battle, game: { ...next, recoveredDiscard: undefined }, attack: undefined, specialStrike: undefined, jokerExplosion: undefined, spy: undefined, completedAttack: undefined };
 }
 
 export function battleForSeat(battle, seat) {
   const { game } = battle;
   const own = seat === battle.seat;
   const outcome = matchOutcome(game);
+  const enemySide = own ? "computer" : "player";
+  const enemyField = own ? game.computerField : game.playerField;
+  const enemyRecovery = visibleConvertRecovery(game, enemySide);
+  const revealedEnemyCards = new Set(enemyField.flatMap(unit => unit?.revealed ? [cardKey(unit.card)] : []));
   return {
     hand: own ? game.player : game.computer, opponentCardCount: (own ? game.computer : game.player).length,
     deckCount: game.drawPile.length, turn: game.turn, step: game.step, active: own && !outcome,
@@ -141,12 +146,16 @@ export function battleForSeat(battle, seat) {
       ...game.recoveredDiscard, side: own ? game.recoveredDiscard.side : game.recoveredDiscard.side === "player" ? "computer" : "player",
     },
     attack: battle.attack && { ...battle.attack, side: battle.attack.seat === seat ? "player" : "computer" },
+    specialStrike: battle.specialStrike && { ...battle.specialStrike, side: battle.specialStrike.seat === seat ? "player" : "computer" },
     jokerExplosion: battle.jokerExplosion, spy: battle.spy,
     doubleAttack: own && game.queenAttackTurn === game.turn ? game.extraAttack ? 2 : 1 : undefined,
     completedAttack: battle.completedAttack && {
       turn: battle.completedAttack.turn, byYou: battle.completedAttack.seat === seat,
     },
-    recovery: game.convertRecovery?.[own ? "player" : "computer"]?.turn === game.turn,
+    convertRecovery: {
+      player: visibleConvertRecovery(game, own ? "player" : "computer"),
+      computer: enemyRecovery && { ...enemyRecovery, knights: enemyRecovery.knights.filter(card => revealedEnemyCards.has(cardKey(card))) },
+    },
     result: game.result.replace(/^You attacked/, (battle.completedAttack?.seat ?? battle.attack?.seat) === seat ? "You attacked" : "Your friend attacked")
       .replace(/^Convert!.*?joined your hand\. You cannot attack next turn\./, own ? "Your friend converted a card and cannot attack next turn." : "$&"),
     outcome: outcome && (own || outcome === "draw" ? outcome : outcome === "victory" ? "defeat" : "victory"),

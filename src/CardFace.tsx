@@ -17,6 +17,7 @@ const characters: Partial<Record<Rank, { sprite: string; className: string; size
 
 const suitSprites: Partial<Record<Rank, Partial<Record<Suit, string>>>> = {
   "8": { clubs: "unicorn-lancer-8-clubs", spades: "dark-rider-9-spades", diamonds: "pegasus-rider-8-diamonds" },
+  "10": { hearts: "dragon-10-hearts" },
   "9": {
     hearts: "flame-swordsman-9-hearts",
     clubs: "spear-warrior-9-clubs-steady",
@@ -30,7 +31,9 @@ function cardSprite(card?: Card, attachedShield = false) {
   return !card ? undefined
     : card.type === "joker" ? { sprite: "joker-bomb", className: "card-ranger-overlay", size: 50 }
     : suitSprite
-      ? { sprite: suitSprite, className: suitSprite === "unicorn-lancer-8-clubs" ? "card-unicorn-lancer-overlay" : "card-ranger-overlay", size: 60 }
+      ? { sprite: suitSprite, className: suitSprite === "unicorn-lancer-8-clubs" ? "card-unicorn-lancer-overlay"
+          : suitSprite === "pegasus-rider-8-diamonds" ? "card-pegasus-rider-overlay"
+          : suitSprite === "dragon-10-hearts" ? "card-heart-dragon-overlay" : "card-ranger-overlay", size: 60 }
       : !attachedShield && (card.rank === "J" || card.rank === "Q")
         ? { sprite: "shield-jq", className: "", size: 32 } : characters[card.rank];
 }

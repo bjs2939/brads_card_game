@@ -59,7 +59,7 @@ export type Game = ReturnType<typeof dealSimpleGame> & {
   recoveredDiscard?: { card: Card; side: Side };
   deckWarning?: 0 | 1 | 2 | 3 | 4 | 5 | 10;
   spyFlash?: Card;
-  attackAnimation?: { attacker: Card; target: Card; side: Side; kind: "ranger" | "dragon" | "card" | "convert"; shield?: { card?: Card; builtIn?: true } };
+  attackAnimation?: { attacker: Card; target: Card; side: Side; kind: "ranger" | "dragon" | "card" | "convert"; shield?: { card?: Card; builtIn?: true }; recruited?: Card[] };
   tutorialCombatReaction?: "joker-blast-reaction" | "enemy-ace-steal" | "enemy-king";
   jokerExplosion?: { turn: number; survived: boolean; attacker: Card };
   selected: number | null;
@@ -188,6 +188,11 @@ export function canAttackTarget(attacker: Unit, from: number, field: Field, targ
 export function canAttackFrom(attacker: Unit, from: number, field: Field, castleCards: number) {
   return field.some((_, index) => canAttackTarget(attacker, from, field, index)) ||
     (castleCards > 0 && !field.some(Boolean) && isNumber(attacker.card) && fieldRank(attacker, from) === "front");
+}
+
+export function visibleConvertRecovery(game: Game, side: Side) {
+  const recovery = game.convertRecovery?.[side];
+  return recovery && game.turn <= recovery.turn ? recovery : undefined;
 }
 
 export function attackRestricted(game: Game, side: Side = "player") {
@@ -772,7 +777,8 @@ export function resolveAttack(game: Game, side: Side, attackerIndex: number, tar
     discardPile: discarded.length ? [...game.discardPile, ...discarded] : game.discardPile,
     selected: null,
     pendingAttack: undefined,
-    attackAnimation: makeAttackAnimation(attacker, defendedUnit.card, side, blast, shieldAnimation, convert),
+    attackAnimation: { ...makeAttackAnimation(attacker, defendedUnit.card, side, blast, shieldAnimation, convert),
+      recruited: recruited.length ? recruited : undefined },
     jokerExplosion: blast ? { turn: game.turn, survived: survivesBlast, attacker: attacker.card } : undefined,
     phase: nextSide,
     advantage: attack.bonus > 0,

@@ -15,7 +15,7 @@ type View = {
   recoveredDiscard?: { card: Card };
 };
 
-export function useCardMotion(game: View) {
+export function useCardMotion(game: View, animateCards = true) {
   const board = useRef<HTMLElement>(null);
   const previous = useRef<{
     cards: Map<Card, { rect: DOMRect; faceDown: boolean }>;
@@ -55,7 +55,7 @@ export function useCardMotion(game: View) {
 
         const rect = element.getBoundingClientRect();
         cards.set(unit.card, { rect, faceDown: !unit.revealed });
-        if (reduced || !element.animate || !rect.width) return;
+        if (!animateCards || reduced || !element.animate || !rect.width) return;
 
         const from = old?.cards.get(unit.card);
         const drawing = !from && (Boolean(old) || unit.card === drawn);
@@ -90,7 +90,7 @@ export function useCardMotion(game: View) {
     });
 
     previous.current = { cards, deck, round: game.round };
-  }, [game]);
+  }, [game, animateCards]);
 
   return board;
 }
