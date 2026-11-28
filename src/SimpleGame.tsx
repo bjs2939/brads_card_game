@@ -1,3 +1,4 @@
+import type { FriendOpeningView } from "./FriendLobby";
 import { TutorialBattleDialogue, tutorialLessons } from "./TutorialIntro";
 import { useCallback, useEffect, useRef, useState } from "react";
 import CardFace from "./CardFace";
@@ -1223,9 +1224,9 @@ function finishPlayerAttack(game: Game): Game {
   return drawForTurn({ ...game, extraAttack: false }, "computer");
 }
 
-function startGame(tutorial = false, starter: Side = "player", jokerCount = 4): Game {
+function startGame(tutorial = false, starter: Side = "player", jokerCount = 4, deal?: ReturnType<typeof dealSimpleGame>): Game {
   const opening: Game = {
-    ...dealSimpleGame(tutorial ? createTutorialDeck() : shuffleDeck(createFullDeck(jokerCount))),
+    ...(deal ?? dealSimpleGame(tutorial ? createTutorialDeck() : shuffleDeck(createFullDeck(jokerCount)))),
     playerField: [],
     backRankAtTurnStart: [],
     computerField: [],
@@ -1647,18 +1648,22 @@ function describeMatchActions(previous: Game, current: Game): string[] {
   return lines;
 }
 
-export default function SimpleGame({ difficulty, trainingGrounds = false, tutorial = false, tutorialAudio = null, onBack, music, onResultChange, onGarbageMusicChange }: {
+export default function SimpleGame({ difficulty, trainingGrounds = false, tutorial = false, tutorialAudio = null, friendOpening, onBack, music, onResultChange, onGarbageMusicChange }: {
   difficulty: Difficulty;
   trainingGrounds?: boolean;
   tutorial?: boolean;
   tutorialAudio?: AudioContext | null;
+  friendOpening?: FriendOpeningView;
   onBack: () => void;
   music: { enabled: boolean; toggle: () => void; setDucked: (ducked: boolean) => void };
   onResultChange: (visible: boolean) => void;
   onGarbageMusicChange: (active: boolean) => void;
 }) {
-  const [game, setGame] = useState(() => startGame(tutorial));
-  const needsGameSetup = !tutorial && !trainingGrounds;
+  const [game, setGame] = useState(() => friendOpening ? startGame(false, friendOpening.goesFirst ? "player" : "computer", 0, {
+    player: friendOpening.hand, computer: new Array<Card>(friendOpening.opponentCardCount),
+    drawPile: new Array<Card>(friendOpening.deckCount),
+  }) : startGame(tutorial));
+  const needsGameSetup = !tutorial && !trainingGrounds && !friendOpening;
   const [setupPending, setSetupPending] = useState(needsGameSetup);
   const [firstTurn, setFirstTurn] = useState<Side | "flip">("flip");
   const [jokerCount, setJokerCount] = useState(4);
@@ -1822,7 +1827,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     if (convertTarget !== null && dialog && !dialog.open) dialog.showModal();
     if (convertTarget === null && dialog?.open) dialog.close();
   }, [convertTarget]);
-  const paused = setupPending || pauseRequested || utilityOpen || !!activeLesson || convertTarget !== null;
+  const paused = !!friendOpening || setupPending || pauseRequested || utilityOpen || !!activeLesson || convertTarget !== null;
   const healthStats = useRef<HTMLDListElement>(null);
   useEffect(() => {
     if (activeLesson !== "health-stats") return;
@@ -1876,7 +1881,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   }
   const latestDiscard = game.discardPile[game.discardPile.length - 1];
   const board = useCardMotion(game);
-  const modeLabel = tutorial ? "Tutorial · Easy" : trainingGrounds ? "Training Grounds" : `VS Computer · ${difficulty}`;
+  const modeLabel = friendOpening ? "VS Friend" : tutorial ? "Tutorial · Easy" : trainingGrounds ? "Training Grounds" : `VS Computer · ${difficulty}`;
   useEffect(() => {
     if (game.turn <= 1 && !outcome) return;
     saveMatch({
@@ -3394,7 +3399,13 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   }
 
   return (
-    <main ref={board} className="simple-game-table" data-paused={paused}
+    <>
+    {friendOpening && <header className="friend-battlefield-status">
+      <p><strong>{friendOpening.goesFirst ? "You go first." : friendOpening.opponentName + " goes first."}</strong> Battlefield preview. Turns and combat are coming next.</p>
+      <button type="button" className="playtest-button" onClick={onBack}>Back to Home</button>
+    </header>}
+    <main ref={board} className="simple-game-table" data-paused={paused && !friendOpening}
+      {...(friendOpening ? { inert: "" } : {})}
       onPointerMove={moveShieldDrag} onPointerUp={finishShieldDrag}
       onPointerCancel={finishShieldDrag} onLostPointerCapture={finishShieldDrag}
       onPointerDownCapture={() => { suppressShieldClick.current = false; }}
@@ -3718,7 +3729,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           <span className="opponent-waiting-label">Waiting for opponent</span>
         </div>
       )}
-      {isComputer && (
+      {isComputer && !friendOpening && (
         <aside className="opponent-turn-tip" aria-labelledby="opponent-turn-heading">
           <h3 id="opponent-turn-heading">Opponent’s Turn</h3>
           <p><strong>Tip</strong> {matchTips[(Math.ceil(game.turn / 2) - 1) % matchTips.length]}</p>
@@ -3790,11 +3801,11 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           </div>
         )}
       </div>
-      <h2 className="opponent-hand-heading">Computer’s hand</h2>
+      <h2 className="opponent-hand-heading">{friendOpening ? friendOpening.opponentName + " — hand" : "Computer hand"}</h2>
       <div className="hand-row opponent-hand-row" data-castle-targeting={castleTargeting} style={compactBoard ? undefined : handLayout}>
         {Array.from({ length: setupPending ? 0 : game.computer.length }, (_, index) => (
           <div key={index} data-card-position={`computer-${index}`}
-            className={game.recoveredDiscard?.card === game.computer[index] ? "drawn-hand-card" : undefined}>
+            className={game.recoveredDiscard && game.recoveredDiscard.card === game.computer[index] ? "drawn-hand-card" : undefined}>
             {castleTargeting ? (
               <button className="simple-game-castle-target" aria-label={`Attack castle, hidden card ${index + 1}`} onClick={() => attackCastle(index)}>
                 <CardFace faceDown />
@@ -3881,7 +3892,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
               revealedEffectCards={revealedEffectCards}
               recoveringKnights={isComputer && attackRestricted(game, "computer") ? game.convertRecovery?.computer?.knights : undefined}
               rank={rank}
-              label={rank === "front" ? "Computer front rank" : "Computer back rank"}
+              label={(friendOpening?.opponentName ?? "Computer") + " " + rank + " rank"}
               opponent
               onInspect={inspect}
               inspected={inspected}
@@ -4120,5 +4131,6 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
         </>
       )}
     </main>
+    </>
   );
 }

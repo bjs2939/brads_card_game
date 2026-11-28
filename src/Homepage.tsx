@@ -4,7 +4,7 @@ import CardFace from "./CardFace";
 import { Feedback, MatchHistory, gameVersion } from "./PlaytestPanels";
 import SimpleGame, { difficulties, simpleVersionTitle, type Difficulty } from "./SimpleGame";
 import { useBackgroundMusic } from "./useGameSound";
-import FriendLobby, { inviteCode } from "./FriendLobby";
+import FriendLobby, { inviteCode, type FriendOpeningView } from "./FriendLobby";
 import "./Homepage.css";
 
 const difficultyDescriptions: Record<Difficulty, string> = {
@@ -18,6 +18,7 @@ export default function HomePage() {
   const [playerName, setPlayerName] = useState(() => localStorage.getItem("brads-card-game:player-name")?.trim().slice(0, 24) ?? "");
   const [nameDraft, setNameDraft] = useState(playerName);
   const [editingName, setEditingName] = useState(false);
+  const [friendOpening, setFriendOpening] = useState<FriendOpeningView>();
   const [difficulty, setDifficulty] = useState<Difficulty | null>(null);
   const [trainingGrounds, setTrainingGrounds] = useState(false);
   const [tutorial, setTutorial] = useState(false);
@@ -93,6 +94,12 @@ export default function HomePage() {
     return <TutorialIntro audio={tutorialAudio.current} onDeal={() => launchMatch("Easy", false, true)} onExit={goHome} />;
   }
 
+  if (friendOpening) {
+    return <SimpleGame difficulty="Normal" friendOpening={friendOpening} music={music}
+      onResultChange={setShowingResult} onGarbageMusicChange={setGarbageMusic}
+      onBack={() => setFriendOpening(undefined)} />;
+  }
+
   if (difficulty) {
     return <SimpleGame difficulty={difficulty} trainingGrounds={trainingGrounds} tutorial={tutorial} tutorialAudio={tutorialAudio.current} onBack={goHome} music={music} onResultChange={setShowingResult} onGarbageMusicChange={setGarbageMusic} />;
   }
@@ -143,7 +150,7 @@ export default function HomePage() {
                 onChange={event => setNameDraft(event.target.value)} /></label>
               <button type="submit" disabled={!nameDraft.trim()}>{editingName ? "Save name" : "Continue"}</button>
             </form>
-          ) : menu === "friend" ? <FriendLobby playerName={playerName} /> : menu === "difficulty" ? difficulties.map(level => (
+          ) : menu === "friend" ? <FriendLobby playerName={playerName} onMatch={setFriendOpening} /> : menu === "difficulty" ? difficulties.map(level => (
             <div className="difficulty-row" key={level}>
               <button onClick={() => launchMatch(level)}>{level}</button>
               <div className="difficulty-info">

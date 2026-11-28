@@ -14,11 +14,11 @@ const characters: Partial<Record<Rank, { sprite: string; className: string; size
 };
 
 const suitSprites: Partial<Record<Rank, Partial<Record<Suit, string>>>> = {
-  "8": { clubs: "unicorn-lancer-8-clubs" },
+  "8": { clubs: "unicorn-lancer-8-clubs", spades: "dark-rider-9-spades" },
   "9": {
     hearts: "flame-swordsman-9-hearts",
     clubs: "spear-warrior-9-clubs",
-    spades: "dark-rider-9-spades",
+    spades: "axe-warrior-9-spades",
     diamonds: "wizard-9-diamonds",
   },
 };
@@ -39,7 +39,7 @@ export default function CardFace({ card, faceDown = false }: { card?: Card; face
       : characters[card.rank];
 
   return (
-    <div data-legendary-card={legendary || undefined} data-dragon-card={dragon || undefined} style={{ width: "100%", aspectRatio: "5 / 7", position: "relative" }}>
+    <div data-legendary-card={legendary || undefined} data-dragon-card={dragon || undefined} data-blue-rider={character?.sprite === "dark-rider-9-spades" || undefined} data-fiery-spartan={character?.sprite === "spear-warrior-9-clubs" || undefined} style={{ width: "100%", aspectRatio: "5 / 7", position: "relative" }}>
       {image ? (
         <img key={image} draggable={false}
           src={`${import.meta.env.BASE_URL}assets/cards/${image}.png`}

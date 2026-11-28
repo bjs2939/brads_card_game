@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import CardFace from "./CardFace";
 import type { Card } from "./game_engine/types";
 
 type FirstTurn = "flip" | "host" | "guest";
+export type FriendOpeningView = { hand: Card[]; opponentCardCount: number; deckCount: number; goesFirst: boolean; opponentName: string };
 type Room = {
   code: string;
   seat: "host" | "guest";
@@ -27,7 +27,7 @@ async function roomRequest(path: string, options?: RequestInit) {
   return data;
 }
 
-export default function FriendLobby({ playerName }: { playerName: string }) {
+export default function FriendLobby({ playerName, onMatch }: { playerName: string; onMatch: (opening: FriendOpeningView) => void }) {
   const [code, setCode] = useState(inviteCode);
   const [room, setRoom] = useState<Room>();
   const [firstTurn, setFirstTurn] = useState<FirstTurn>("flip");
@@ -58,6 +58,13 @@ export default function FriendLobby({ playerName }: { playerName: string }) {
     const timer = window.setInterval(refresh, 1500);
     return () => { controller.abort(); window.clearInterval(timer); };
   }, [activeCode, credentialKey, validCode, busy]);
+
+  useEffect(() => {
+    if (!room?.opening) return;
+    const { hand, deckCount, opponentCardCount, firstSeat } = room.opening;
+    onMatch({ hand, deckCount, opponentCardCount, goesFirst: firstSeat === room.seat,
+      opponentName: (room.seat === "host" ? room.guestName : room.hostName) ?? "Opponent" });
+  }, [room, onMatch]);
 
   async function enter(join: boolean) {
     setBusy(true);
@@ -136,17 +143,7 @@ export default function FriendLobby({ playerName }: { playerName: string }) {
 
   return (
     <div className="friend-lobby">
-      {room?.opening ? (
-        <>
-          <p role="status">{room.opening.firstSeat === room.seat ? "You go first." : "Your friend goes first."}</p>
-          <p>Your opening hand</p>
-          <div className="friend-opening-hand">
-            {room.opening.hand.map((card, index) => <CardFace key={index} card={card} />)}
-          </div>
-          <p>Opponent hand: {room.opening.opponentCardCount} cards · Deck: {room.opening.deckCount} cards</p>
-          <p>Opening deal preview. Battlefield turns and combat are coming next.</p>
-        </>
-      ) : room ? (
+      {room ? (
         <>
           <p>{room.ready ? "Both players joined." : "Waiting for your friend to join…"}</p>
           <p>Host: {room.hostName}{room.guestName && <> · Guest: {room.guestName}</>}</p>

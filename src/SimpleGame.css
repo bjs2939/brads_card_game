@@ -2055,3 +2055,42 @@ button.simple-game-shield-card:is(:hover, :focus-visible, [aria-pressed="true"])
   .convert-magic-travel { left: 69%; opacity: 0.5; }
   .convert-magic-frames { background-position: 85.714% 0; }
 }
+
+[data-fiery-spartan] .card-ranger-overlay {
+  filter: drop-shadow(0 0.13rem 0.18rem #ff4b0e) drop-shadow(0 0 0.24rem #ff9a28);
+  animation: spartan-fire-glow 1.1s ease-in-out infinite alternate;
+}
+
+[data-fiery-spartan]::before {
+  content: "";
+  position: absolute;
+  z-index: 5;
+  top: 53%;
+  left: 34%;
+  width: 0.14rem;
+  height: 0.14rem;
+  background: #fff0a0;
+  box-shadow: 0.55rem 0.22rem #ff731e, 1.15rem -0.36rem #ffc45a,
+    1.55rem 0.18rem #ff550e, -0.5rem 0.45rem #fd9132;
+  pointer-events: none;
+  animation: spartan-embers 1.3s ease-out infinite;
+}
+
+@keyframes spartan-fire-glow {
+  to { filter: drop-shadow(0 0.15rem 0.28rem #ff3b08) drop-shadow(0 0 0.45rem #ffb43c); }
+}
+
+@keyframes spartan-embers {
+  from { opacity: 0; transform: translateY(0); }
+  25% { opacity: 1; }
+  to { opacity: 0; transform: translate(0.18rem, -1.1rem); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-fiery-spartan] .card-ranger-overlay { animation: none; }
+  [data-fiery-spartan]::before { display: none; }
+}
+
+[data-blue-rider] .card-ranger-overlay {
+  filter: brightness(1.38) saturate(1.37) drop-shadow(0 0 0.16rem #64b8ffb0);
+}

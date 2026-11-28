@@ -176,8 +176,15 @@
   color: #edc477;
 }
 
-.friend-opening-hand {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.35rem;
+.friend-battlefield-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  padding: 0.55rem 1rem;
+  color: #f8edd4;
+  background: #102c2d;
 }
+
+.friend-battlefield-status p { margin: 0; }
