@@ -7,6 +7,10 @@ export function canDeploy(card: Card): boolean {
   return card.type === "joker" || ranks.indexOf(card.rank) <= ranks.indexOf("10");
 }
 
+export function openingBackRankComplete(backRankFull: boolean, hand: Card[]): boolean {
+  return backRankFull && hand.every(canDeploy);
+}
+
 const suits: Suit[] = ["hearts", "diamonds", "clubs", "spades"];
 
 export function createStandardDeck(): StandardCard[] {

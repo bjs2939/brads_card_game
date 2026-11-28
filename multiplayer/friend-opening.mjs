@@ -1,4 +1,4 @@
-import { canDeploy, createFullDeck, dealSimpleGame, shuffleDeck } from "../src/game_engine/deck.ts";
+import { canDeploy, createFullDeck, dealSimpleGame, openingBackRankComplete, shuffleDeck } from "../src/game_engine/deck.ts";
 
 export function dealFriendOpening(settings) {
   const { player, computer, drawPile } = dealSimpleGame(shuffleDeck(createFullDeck(settings.jokers)));
@@ -31,14 +31,13 @@ export function playFriendOpening(opening, seat, action, index, revision) {
     if (!Number.isInteger(index) || !card || !canDeploy(card) || fields[seat].length >= 3) return null;
     next.fields = { ...fields, [seat]: [...fields[seat], card] };
     next.hands = { ...opening.hands, [seat]: hand.filter((_, position) => position !== index) };
-    return next;
-  }
-  if (action !== "end-turn") return null;
+    if (turn !== 1 || !openingBackRankComplete(next.fields[seat].length === 3, next.hands[seat])) return next;
+  } else if (action !== "end-turn") return null;
   next.turn++;
   if (turn === 1 && opening.drawPile.length) {
     const opponent = otherSeat(seat);
     const [draw, ...remaining] = opening.drawPile;
-    next.hands = { ...opening.hands, [opponent]: [...opening.hands[opponent], draw] };
+    next.hands = { ...next.hands, [opponent]: [...next.hands[opponent], draw] };
     next.drawPile = remaining;
   }
   return next;

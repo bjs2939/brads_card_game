@@ -7,7 +7,7 @@ import { sandboxRetreatPlan, saveMatch } from "./playtest";
 import { useCardMotion } from "./useCardMotion";
 import { useAudioForeground, useGameSound, type GameSound } from "./useGameSound";
 import "./SimpleGame.css";
-import { canDeploy, createFullDeck, createTutorialDeck, dealSimpleGame, ranks, shuffleDeck, tutorialDeploymentRanks } from "./game_engine/deck";
+import { canDeploy, createFullDeck, createTutorialDeck, dealSimpleGame, openingBackRankComplete, ranks, shuffleDeck, tutorialDeploymentRanks } from "./game_engine/deck";
 import type { Card, Suit } from "./game_engine/types";
 
 export const simpleVersionTitle = "Brad's Card Game";
@@ -384,7 +384,9 @@ function hasHandStack(field: Field, card: Card) {
 
 function openingPlaysExhausted(game: Game, tutorial: boolean) {
   if (game.phase !== "player" || game.turn > 2 || game.step !== "move-out") return false;
-  if (tutorial) return openLanes(game.playerField, "back").length === 0;
+  const backRankFull = openLanes(game.playerField, "back").length === 0;
+  if (tutorial) return backRankFull;
+  if (game.turn === 1 && backRankFull) return openingBackRankComplete(backRankFull, game.player);
   const canAttachShield = game.playerField.some(canShield) && game.player.some(isShield);
   return !hasMoveOutAction(game) && !canAttachShield && !game.player.some(card => hasHandStack(game.playerField, card));
 }
@@ -1411,9 +1413,6 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
       onPointerCancel={finishTouchDrag}
       onLostPointerCapture={finishTouchDrag}
       onClickCapture={event => {
-        if (friendOpening && !(event.target instanceof Element && event.target.closest(".player-hand-row button, .simple-game-end-turn, .match-footer-home"))) {
-          event.preventDefault(); event.stopPropagation(); return;
-        }
         if (!suppressTouchClick.current || event.detail === 0) return;
         suppressTouchClick.current = false;
         event.stopPropagation();
@@ -3439,7 +3438,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
       onPointerCancel={finishShieldDrag} onLostPointerCapture={finishShieldDrag}
       onPointerDownCapture={() => { suppressShieldClick.current = false; }}
       onClickCapture={event => {
-        if (friendOpening && !(event.target instanceof Element && event.target.closest(".player-hand-row button, .simple-game-end-turn, .match-footer-home"))) {
+        if (friendOpening && !(event.target instanceof Element && event.target.closest(".player-hand-row button, .simple-game-end-turn, .match-footer-home, [data-music-toggle]"))) {
           event.preventDefault(); event.stopPropagation(); return;
         }
         if (suppressShieldClick.current && event.detail !== 0) {

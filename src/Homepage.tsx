@@ -29,7 +29,7 @@ export default function HomePage() {
   const [garbageMusic, setGarbageMusic] = useState(false);
   const tutorialAudio = useRef<AudioContext | null>(null);
   const modePicker = useRef<HTMLDialogElement>(null);
-  const music = useBackgroundMusic(!difficulty ? "menu" : showingResult ? null : garbageMusic ? "garbage-collection" : "battle");
+  const music = useBackgroundMusic(!difficulty && !friendOpening ? "menu" : showingResult ? null : garbageMusic ? "garbage-collection" : "battle");
 
   useEffect(() => {
     const controller = new AbortController();
