@@ -4,7 +4,7 @@ import CardFace from "./CardFace";
 import { Feedback, MatchHistory, gameVersion } from "./PlaytestPanels";
 import SimpleGame, { difficulties, simpleVersionTitle, type Difficulty } from "./SimpleGame";
 import { useBackgroundMusic } from "./useGameSound";
-import FriendLobby, { inviteCode, syncFriendMatch, type FriendAction, type FriendOpeningView } from "./FriendLobby";
+import FriendLobby, { inviteCode, resumableFriendCode, syncFriendMatch, type FriendAction, type FriendOpeningView } from "./FriendLobby";
 import "./Homepage.css";
 
 const difficultyDescriptions: Record<Difficulty, string> = {
@@ -50,6 +50,7 @@ export default function HomePage() {
     return () => controller.abort();
   }, []);
 
+  const resumeCode = friendAvailable ? resumableFriendCode() : "";
   const friendCode = friendOpening?.code;
   useEffect(() => {
     if (!friendCode) return;
@@ -144,6 +145,13 @@ export default function HomePage() {
           <p>Build your battlefield and take the opposing castle.</p>
           <div className="game-home-actions">
             <button className="game-home-primary" aria-haspopup="dialog" onClick={() => { setEditingName(false); setMenu("modes"); modePicker.current?.showModal(); }}>Play Brad’s Card Game</button>
+            {resumeCode && <button aria-haspopup="dialog" onClick={() => {
+              const url = new URL(window.location.href);
+              url.hash = "friend=" + resumeCode;
+              history.replaceState(null, "", url);
+              setMenu("friend");
+              modePicker.current?.showModal();
+            }}>Resume VS Friend</button>}
           </div>
           <div className="playtest-actions">
             <Feedback context={`Version ${gameVersion} · Main menu`} />

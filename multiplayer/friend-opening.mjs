@@ -1,6 +1,6 @@
 import { battleForSeat, maskFriendField, openingField, playFriendBattle, startFriendBattle } from "./friend-battle.mjs";
-import { equipShield, openingPlaysExhausted, stackOnto } from "../src/game_engine/battle.ts";
-import { canDeploy, createFullDeck, dealSimpleGame, shuffleDeck } from "../src/game_engine/deck.ts";
+import { deployFromHand, dropFieldUnit, unstackUnit, equipShield, openingPlaysExhausted, stackOnto, transferPlayerShield, undoPlayerMovement } from "../src/game_engine/battle.ts";
+import { createFullDeck, dealSimpleGame, shuffleDeck } from "../src/game_engine/deck.ts";
 
 export function dealFriendOpening(settings) {
   const { player, computer, drawPile } = dealSimpleGame(shuffleDeck(createFullDeck(settings.jokers)));
@@ -17,7 +17,8 @@ export function openingForSeat(opening, seat) {
     ...battleForSeat(opening.battle ?? startFriendBattle(opening), seat) };
   return { firstSeat: opening.firstSeat, hand: opening.hands[seat],
     turn: opening.turn ?? 1, revision: opening.revision ?? 0,
-    deployed: opening.fields?.[seat] ?? [], opponentDeployed: opening.fields?.[otherSeat(seat)]?.length ?? 0,
+    deployed: (opening.fields?.[seat] ?? []).filter(Boolean), opponentDeployed: (opening.fields?.[otherSeat(seat)] ?? []).filter(Boolean).length,
+    undoCount: seat === ((opening.turn ?? 1) === 1 ? opening.firstSeat : otherSeat(opening.firstSeat)) ? opening.movements?.[seat]?.length ?? 0 : 0,
     shields: opening.shields?.[seat] ?? [],
     ownField: openingField(opening, seat), enemyField: maskFriendField(openingField(opening, otherSeat(seat))),
     opponentShieldCounts: (opening.shields?.[otherSeat(seat)] ?? []).map(layers => layers?.length ?? 0),
@@ -37,26 +38,34 @@ export function playFriendOpening(opening, seat, action, index, revision, target
   const fields = opening.fields ?? { host: [], guest: [] };
   const hand = opening.hands[seat];
   const next = { ...opening, fields, turn, revision: revision + 1 };
-  if (action === "deploy") {
-    const card = hand[index];
-    if (!Number.isInteger(index) || !card || !canDeploy(card) || fields[seat].length >= 3) return null;
-    next.fields = { ...fields, [seat]: [...fields[seat], card] };
-    next.hands = { ...opening.hands, [seat]: hand.filter((_, position) => position !== index) };
-  } else if (action === "shield" || action === "stack-hand") {
-    if (!Number.isInteger(index) || !Number.isInteger(target)) return null;
-    const playerField = openingField(opening, seat);
-    const game = { phase: "player", step: "move-out", player: hand, playerField };
-    if (!hand[index]) return null;
-    const equipped = action === "shield" ? equipShield(game, hand[index], target)
-      : stackOnto(game, { from: "hand", card: hand[index] }, target);
-    if (equipped === game) return null;
-    next.hands = { ...opening.hands, [seat]: equipped.player };
-    next.shields = { ...opening.shields, [seat]: equipped.playerField.slice(3, 6).map(unit => unit?.shields ?? []) };
-    next.stacks = { ...opening.stacks, [seat]: equipped.playerField.slice(6) };
-  } else if (action !== "end-turn") return null;
-  if (action !== "end-turn" && !openingPlaysExhausted({
-    phase: "player", turn, step: "move-out", playerField: openingField(next, seat), player: next.hands[seat],
-  }, false)) return next;
+  if (action !== "end-turn") {
+    const game = { phase: "player", step: "move-out", turn, player: hand,
+      playerField: openingField(opening, seat), movements: opening.movements?.[seat] };
+    const card = Number.isInteger(index) ? hand[index] : undefined;
+    let updated = game;
+    if (action === "undo") updated = undoPlayerMovement(game);
+    if (action === "deploy" && card) updated = deployFromHand(game, card);
+    if (action === "shield" && card && Number.isInteger(target)) updated = equipShield(game, card, target);
+    if (action === "stack-hand" && card && Number.isInteger(target)) updated = stackOnto(game, { from: "hand", card }, target);
+    if (action === "transfer" && Number.isInteger(index) && Number.isInteger(target) && index !== target &&
+        Number.isInteger(shieldIndex)) {
+      const source = game.playerField[index];
+      const layer = source?.shields?.[shieldIndex];
+      if (layer) updated = transferPlayerShield(game, { source: source.card, layer }, target);
+    }
+    if ((action === "drop-field" || action === "swap-field") && Number.isInteger(index) && Number.isInteger(target)) {
+      updated = dropFieldUnit(game, index, target, action === "swap-field");
+    }
+    if (action === "unstack" && Number.isInteger(index)) updated = unstackUnit(game, index);
+    if (updated === game) return null;
+    const back = updated.playerField.slice(3, 6);
+    next.fields = { ...fields, [seat]: back.map(unit => unit?.card ?? null) };
+    next.hands = { ...opening.hands, [seat]: updated.player };
+    next.shields = { ...opening.shields, [seat]: back.map(unit => unit?.shields ?? []) };
+    next.stacks = { ...opening.stacks, [seat]: updated.playerField.slice(6) };
+    next.movements = { ...opening.movements, [seat]: updated.movements };
+    if (action === "transfer" || !openingPlaysExhausted(updated, false)) return next;
+  }
   next.turn++;
   if (turn === 1 && opening.drawPile.length) {
     const opponent = otherSeat(seat);

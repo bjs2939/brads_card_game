@@ -1,10 +1,9 @@
 import {
-  advancePlayerStep, attackDefense, canAttackFrom, canDeployThisPhase, castleAttackerIndex, deploy,
-  cardKey, drawForTurn, equipShield, fieldRank, laneCards, laneOf, makeAttackAnimation, matchOutcome, openLanes, revealCollectors, isCollector,
+  advancePlayerStep, attackDefense, castleAttackerIndex, deploy, deployFromHand, dropFieldUnit, unstackUnit,
+  cardKey, drawForTurn, equipShield, makeAttackAnimation, matchOutcome, revealCollectors, isCollector,
   playerStepAfterDraw, preferredPromotionLane, promoteUnit, rearrangeRank, resolveAttack,
-  resolveSpecial, slotsPerRank, stackOnto, transferPlayerShield, undoPlayerMovement,
+  resolveSpecial, stackOnto, transferPlayerShield, undoPlayerMovement, useShieldAbility, continueDoubleAttack,
 } from "../src/game_engine/battle.ts";
-import { canDeploy } from "../src/game_engine/deck.ts";
 
 const otherSeat = seat => seat === "host" ? "guest" : "host";
 
@@ -37,7 +36,7 @@ export function startFriendBattle(opening) {
 
 function beginTurn(game) {
   const drawn = drawForTurn({ ...game, phase: "player", attackAnimation: undefined,
-    jokerExplosion: undefined, specialStrike: undefined, recoveredDiscard: undefined }, "player");
+    jokerExplosion: undefined, specialStrike: undefined, spyFlash: undefined, recoveredDiscard: undefined, extraAttack: false }, "player");
   return { ...drawn, step: playerStepAfterDraw(drawn), drawnCard: undefined, deckWarning: undefined };
 }
 
@@ -54,7 +53,7 @@ export function playFriendBattle(battle, seat, action, index, target, shieldInde
   const stored = battle.game;
   const cards = new Map(stored.playerField.flatMap(unit => unit ? [[cardKey(unit.card), unit.card]] : []));
   const cardRef = card => cards.get(cardKey(card)) ?? card;
-  const game = { ...stored, recoveredDiscard: undefined, backRankAtTurnStart: stored.backRankAtTurnStart?.map(cardRef),
+  const game = { ...stored, attackAnimation: undefined, jokerExplosion: undefined, specialStrike: undefined, spyFlash: undefined, recoveredDiscard: undefined, backRankAtTurnStart: stored.backRankAtTurnStart?.map(cardRef),
     movements: stored.movements?.map(move => move.kind === "deploy"
       ? { ...move, card: cardRef(move.card) } : { ...move, cards: move.cards.map(cardRef) }) };
   if (seat !== battle.seat || matchOutcome(game)) return null;
@@ -67,6 +66,15 @@ export function playFriendBattle(battle, seat, action, index, target, shieldInde
   if (action === "collect" && game.playerField.filter(isCollector).length >= 3 &&
       game.playerField.some(unit => isCollector(unit) && !unit.revealed)) {
     next = { ...game, playerField: revealCollectors(game.playerField), result: "Garbage Collection activated." };
+  }
+  if ((action === "drop-field" || action === "swap-field") && unit && target !== undefined) {
+    next = dropFieldUnit(game, index, target, action === "swap-field");
+  }
+  if (action === "unstack" && unit) next = unstackUnit(game, index);
+  if (action === "shield-ability") {
+    const support = shieldIndex === undefined ? card :
+      Number.isInteger(shieldIndex) ? unit?.shields?.[shieldIndex]?.card : undefined;
+    if (support) next = useShieldAbility(game, support);
   }
   if (action === "undo") next = undoPlayerMovement(game);
   if (action === "retreat" && unit) {
@@ -86,15 +94,9 @@ export function playFriendBattle(battle, seat, action, index, target, shieldInde
   }
   if (action === "stack-hand" && card) next = stackOnto(game, { from: "hand", card }, target);
   if (action === "stack-field" && unit) next = stackOnto(game, { from: "field", index }, target);
-  if (action === "deploy" && card && canDeploy(card) && canDeployThisPhase(game)) {
-    const open = openLanes(game.playerField, "back");
-    const lane = open.find(slot => laneCards(game.playerField, slot - slotsPerRank).length) ?? open[0];
-    if (lane !== undefined) {
-      const playerField = [...game.playerField];
-      playerField[lane] = deploy(card);
-      next = { ...game, playerField, player: game.player.filter((_, i) => i !== index),
-        step: game.step === "move-up" ? "move-out" : game.step, result: "Card deployed." };
-    }
+  if (action === "deploy" && card) {
+    next = deployFromHand(game, card);
+    if (next !== game && game.step !== "move-up") next.result = "Card deployed.";
   }
   if ((action === "attack" || action === "convert") && unit && game.computerField[target]) {
     const defense = attackDefense(game.computerField, target, game.computerField[target]);
@@ -112,14 +114,18 @@ export function playFriendBattle(battle, seat, action, index, target, shieldInde
   }
   if (next === game) return null;
   if (next.phase === "computer") {
-    const passed = pass(battle, next);
+    const continues = next.extraAttack && !matchOutcome(next);
+    const passed = continues ? { ...battle, game: continueDoubleAttack(next) } : pass(battle, { ...next, movements: undefined });
+    const at = Date.now();
     return {
       ...passed,
-      attack: next.attackAnimation && { ...next.attackAnimation, seat, at: Date.now() },
-      completedAttack: { seat, turn: game.turn },
+      attack: next.attackAnimation && { ...next.attackAnimation, seat, at },
+      jokerExplosion: next.jokerExplosion && { ...next.jokerExplosion, at },
+      spy: next.spyFlash && { card: next.spyFlash, at },
+      completedAttack: continues ? undefined : { seat, turn: game.turn },
     };
   }
-  return { ...battle, game: { ...next, recoveredDiscard: undefined }, attack: undefined, completedAttack: undefined };
+  return { ...battle, game: { ...next, recoveredDiscard: undefined }, attack: undefined, jokerExplosion: undefined, spy: undefined, completedAttack: undefined };
 }
 
 export function battleForSeat(battle, seat) {
@@ -129,11 +135,14 @@ export function battleForSeat(battle, seat) {
   return {
     hand: own ? game.player : game.computer, opponentCardCount: (own ? game.computer : game.player).length,
     deckCount: game.drawPile.length, turn: game.turn, step: game.step, active: own && !outcome,
+    undoCount: own && !outcome ? game.movements?.length ?? 0 : 0,
     ownField: own ? game.playerField : game.computerField, enemyField: maskFriendField(own ? game.computerField : game.playerField),
     discardPile: game.discardPile, recoveredDiscard: game.recoveredDiscard && {
       ...game.recoveredDiscard, side: own ? game.recoveredDiscard.side : game.recoveredDiscard.side === "player" ? "computer" : "player",
     },
     attack: battle.attack && { ...battle.attack, side: battle.attack.seat === seat ? "player" : "computer" },
+    jokerExplosion: battle.jokerExplosion, spy: battle.spy,
+    doubleAttack: own && game.queenAttackTurn === game.turn ? game.extraAttack ? 2 : 1 : undefined,
     completedAttack: battle.completedAttack && {
       turn: battle.completedAttack.turn, byYou: battle.completedAttack.seat === seat,
     },

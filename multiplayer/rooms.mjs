@@ -1,10 +1,30 @@
 import { dealFriendOpening, openingForSeat, playFriendOpening } from "./friend-opening.mjs";
 import { randomBytes } from "node:crypto";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 
 const lifetime = 4 * 60 * 60 * 1000;
 
-export function friendRooms({ now = Date.now } = {}) {
+export function friendRooms({ now = Date.now, savePath } = {}) {
   const rooms = new Map();
+  if (savePath) {
+    try {
+      for (const [code, room] of JSON.parse(readFileSync(savePath, "utf8"))) rooms.set(code, room);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }
+
+  function saveRoom(room) {
+    if (savePath) {
+      const saved = new Map(rooms).set(room.code, room);
+      mkdirSync(dirname(savePath), { recursive: true });
+      const temporary = savePath + ".tmp";
+      writeFileSync(temporary, JSON.stringify([...saved]), { mode: 0o600 });
+      renameSync(temporary, savePath);
+    }
+    rooms.set(room.code, room);
+  }
 
   return function handle(path, method, body = {}, token = "") {
     const reply = (status, data) => ({ status, data });
@@ -39,7 +59,7 @@ export function friendRooms({ now = Date.now } = {}) {
         code, host: randomBytes(24).toString("hex"), hostName: name, expiresAt: time + lifetime,
         settings: { firstTurn, jokers, timer: false },
       };
-      rooms.set(code, room);
+      saveRoom(room);
       return reply(201, { ...view(room, "host"), token: room.host });
     }
 
@@ -51,30 +71,34 @@ export function friendRooms({ now = Date.now } = {}) {
     if (route[2] === "/start" && method === "POST") {
       if (token !== room.host) return error(403, "Only the host can start the match.");
       if (!room.guest) return error(409, "Wait for a friend to join.");
-      room.opening ??= dealFriendOpening(room.settings);
-      return reply(200, view(room, "host"));
+      if (room.opening) return reply(200, view(room, "host"));
+      const updated = { ...room, opening: dealFriendOpening(room.settings) };
+      saveRoom(updated);
+      return reply(200, view(updated, "host"));
     }
     if (route[2] === "/move" && method === "POST") {
       const seat = token === room.host ? "host" : room.guest && token === room.guest ? "guest" : null;
       if (!seat || !room.opening) return error(403, "Join the match before making a move.");
       const next = playFriendOpening(room.opening, seat, body.action, body.index, body.revision, body.target, body.shieldIndex);
       if (!next) return error(409, "That move is unavailable. Check the current turn and try again.");
-      room.opening = next;
-      return reply(200, view(room, seat));
+      const updated = { ...room, opening: next };
+      saveRoom(updated);
+      return reply(200, view(updated, seat));
     }
     if (route[2] === "/join" && method === "POST") {
       if (room.guest) return error(409, "This room already has two players.");
       if (!nameValid) return error(400, nameError);
-      room.guestName = name;
-      room.guest = randomBytes(24).toString("hex");
-      return reply(200, { ...view(room, "guest"), token: room.guest });
+      const updated = { ...room, guestName: name, guest: randomBytes(24).toString("hex") };
+      saveRoom(updated);
+      return reply(200, { ...view(updated, "guest"), token: updated.guest });
     }
     if (!route[2] && method === "PATCH") {
       if (token !== room.host) return error(403, "Only the host can edit settings.");
       if (room.opening) return error(409, "The match has already started.");
       if (!settingsValid) return error(400, settingsError);
-      room.settings = { ...room.settings, firstTurn, jokers };
-      return reply(200, view(room, "host"));
+      const updated = { ...room, settings: { ...room.settings, firstTurn, jokers } };
+      saveRoom(updated);
+      return reply(200, view(updated, "host"));
     }
     if (!route[2] && method === "GET") {
       const seat = token === room.host ? "host" : room.guest && token === room.guest ? "guest" : null;
@@ -85,7 +109,7 @@ export function friendRooms({ now = Date.now } = {}) {
 }
 
 export function friendRoomMiddleware() {
-  const handle = friendRooms();
+  const handle = friendRooms({ savePath: ".cache/friend-rooms.json" });
   return async (request, response, next) => {
     const path = request.url.split("?")[0];
     const prefix = "/api/friend-rooms";
@@ -118,7 +142,12 @@ export function friendRoomMiddleware() {
         return;
       }
     }
-    const result = handle(path.slice(prefix.length), request.method, body, request.headers.authorization?.replace(/^Bearer /, ""));
-    send(result.status, result.data);
+    try {
+      const result = handle(path.slice(prefix.length), request.method, body, request.headers.authorization?.replace(/^Bearer /, ""));
+      send(result.status, result.data);
+    } catch (error) {
+      console.error("Failed to process local friend room:", error.message);
+      send(503, { error: "The local match could not be saved. Try again." });
+    }
   };
 }

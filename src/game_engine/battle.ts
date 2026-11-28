@@ -262,9 +262,31 @@ export function openingPlaysExhausted(game: Game, tutorial: boolean) {
   if (game.phase !== "player" || game.turn > 2 || game.step !== "move-out") return false;
   const backRankFull = openLanes(game.playerField, "back").length === 0;
   if (tutorial) return backRankFull;
+  if (game.turn === 1 && backRankFull) return true;
 
   const canAttachShield = game.playerField.some(canShield) && game.player.some(isShield);
   return (backRankFull || !hasMoveOutAction(game)) && !canAttachShield && !game.player.some(card => hasHandStack(game.playerField, card));
+}
+
+export function deployFromHand(current: Game, card: Card): Game {
+  const field = [...current.playerField];
+  const open = openLanes(field, "back");
+  const slot = open.find(lane => laneCards(field, lane - slotsPerRank).length > 0) ?? open[0];
+  if (!canDeployThisPhase(current) || slot === undefined ||
+      !canDeploy(card) || !current.player.includes(card)) {
+    return current;
+  }
+  field[slot] = deploy(card);
+  return {
+    ...current,
+    step: current.step === "move-up" ? "move-out" : current.step,
+    player: current.player.filter(heldCard => heldCard !== card),
+    movements: recordMovement(current, { kind: "deploy", step: current.step, card, handIndex: current.player.indexOf(card) }),
+    playerField: field,
+    selected: null, selectedShield: null, selectedStack: null, selectedSpecial: null, movingStack: false, movingShield: undefined,
+    result: current.step === "move-up" ? "Card deployed. Skipped to Move Out." : current.result,
+    sound: { cue: "play" },
+  };
 }
 
 export function recordMovement(game: Game, movement: PlayerMovement) {
@@ -291,7 +313,7 @@ export function undoPlayerMovement(game: Game): Game {
   const reset = advancePlayerStep(game, movement.step);
   const movements = game.movements?.slice(0, -1);
   if (movement.kind === "deploy") {
-    const index = game.playerField.findIndex(unit => unit?.card === movement.card);
+    const index = game.playerField.findIndex(unit => unit && cardKey(unit.card) === cardKey(movement.card));
     const unit = game.playerField[index];
     if (!unit) return game;
     const player = [...game.player];
@@ -304,7 +326,7 @@ export function undoPlayerMovement(game: Game): Game {
   const lane = open.includes(movement.backLane) ? movement.backLane : open[0];
   if (lane === undefined) return { ...game, result: "Undo requires an empty back-rank slot." };
   const entries = game.playerField.flatMap((unit, index) =>
-    unit && fieldRank(unit, index) === "front" && movement.cards.includes(unit.card) ? [{ unit, index }] : []);
+    unit && fieldRank(unit, index) === "front" && movement.cards.some(card => cardKey(card) === cardKey(unit.card)) ? [{ unit, index }] : []);
   if (entries.length !== movement.cards.length) return game;
   const playerField = clearMovementEntries(game.playerField, entries);
   const [lead, ...rest] = entries;
@@ -346,6 +368,36 @@ export function rearrangeRank(game: Game, index: number, targetLane: number): Ga
   }
 
   return { ...game, playerField: next, selected: null, movingStack: false, result: "Rearranged your rank." };
+}
+
+export function dropFieldUnit(game: Game, index: number, lane: number, swap = false): Game {
+  const unit = game.playerField[index];
+  if (!unit || !canDeployThisPhase(game)) return game;
+  const entries = laneCards(game.playerField, lane);
+  const matching = !swap && entries.find(entry => canMoveIntoStack(game, index, entry.index));
+  if (matching) return stackOnto(game, { from: "field", index }, matching.index);
+  if (rankLanes[fieldRank(unit, index)].includes(lane)) return rearrangeRank(game, index, lane);
+  return fieldRank(unit, index) === "back" && !entries.length && rankLanes.front.includes(lane)
+    ? promoteUnit(game, index, lane) : game;
+}
+
+export function unstackDestination(field: Field, index: number) {
+  const unit = field[index];
+  if (!unit || laneCards(field, laneOf(unit, index)).length < 2) return undefined;
+  return openLanes(field, fieldRank(unit, index))[0];
+}
+
+export function unstackUnit(game: Game, index: number): Game {
+  if (!canDeployThisPhase(game)) return game;
+  const destination = unstackDestination(game.playerField, index);
+  if (destination === undefined) return game;
+  const unit = game.playerField[index]!;
+  const entries = laneCards(game.playerField, laneOf(unit, index));
+  const moving = (entries[0].index === index ? entries.at(-1) : entries.find(entry => entry.index === index))!;
+  const playerField = [...game.playerField];
+  playerField[moving.index] = null;
+  playerField[destination] = { ...moving.unit, lane: destination };
+  return { ...game, playerField, selected: null, movingStack: false, result: "Card unstacked." };
 }
 
 export function preferredPromotionLane(field: Field, index: number) {
@@ -850,13 +902,52 @@ export function finishPlayerTurn(game: Game): Game {
   }, "computer");
 }
 
+export function useShieldAbility(game: Game, card: Card): Game {
+  if (!canDeployThisPhase(game) || attackRestricted(game) || game.turn <= 2 || game.deckWarning !== undefined) return game;
+  const owner = game.playerField.findIndex(unit => unit?.shields?.some(layer => layer.card === card));
+  const inHand = game.player.includes(card);
+  if (!inHand && owner < 0) return game;
+  if (isJack(card) ? !game.computerField.some(Boolean) : !isQueen(card) || game.queenAttackTurn === game.turn) return game;
+  const spent = {
+    ...game,
+    player: inHand ? game.player.filter(held => held !== card) : game.player,
+    playerField: owner < 0 ? game.playerField : game.playerField.map((unit, index) =>
+      unit && index === owner ? { ...unit, shields: unit.shields?.filter(layer => layer.card !== card) } : unit),
+    discardPile: [...game.discardPile, card],
+    selected: null, selectedShield: null, selectedStack: null, selectedSpecial: null, movingStack: false, movingShield: undefined,
+  };
+  if (isQueen(card)) return {
+    ...spent, extraAttack: true, queenAttackTurn: game.turn,
+    result: "Double Attack activated. You can attack twice this turn.", sound: { cue: "play" },
+  };
+  if (!isJack(card)) return game;
+
+  let revealed = 0;
+  const reveal = <T extends { card: Card; revealed: boolean }>(entry: T): T => {
+    if (entry.revealed || isSpecialImmune(card.suit, entry.card)) return entry;
+    revealed++;
+    return { ...entry, revealed: true };
+  };
+  const computerField = spent.computerField.map(unit => unit && ({ ...reveal(unit), shields: unit.shields?.map(reveal) }));
+  return {
+    ...spent, computerField, phase: "computer", movements: undefined, extraAttack: false,
+    result: revealed ? `Spy revealed ${revealed} ${revealed === 1 ? "card" : "cards"}. Turn ended.`
+      : "Spy found no cards it could reveal. Turn ended.",
+    spyFlash: card, sound: { cue: "spy" },
+  };
+}
+
+export function continueDoubleAttack(game: Game): Game {
+  return {
+    ...game, movements: undefined, phase: "player", step: "attack", extraAttack: false, selected: null, selectedSpecial: null,
+    result: `${game.result} Double Attack: one attack left.`,
+  };
+}
+
 export function finishPlayerAttack(game: Game): Game {
   game = { ...game, movements: undefined };
   if (game.extraAttack && !matchOutcome(game)) {
-    return {
-      ...game, phase: "player", step: "attack", extraAttack: false, selected: null, selectedSpecial: null,
-      result: `${game.result} Double Attack: one attack left.`,
-    };
+    return continueDoubleAttack(game);
   }
   return drawForTurn({ ...game, extraAttack: false }, "computer");
 }

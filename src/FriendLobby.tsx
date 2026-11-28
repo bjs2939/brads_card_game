@@ -4,9 +4,9 @@ import type { Card } from "./game_engine/types";
 
 import type { Field, ShieldLayer, TurnStep, Unit, Game } from "./game_engine/battle";
 
-export type FriendAction = "deploy" | "shield" | "end-turn" | "next" | "promote" | "rearrange" | "stack-hand" | "stack-field" | "attack" | "convert" | "special" | "castle" | "retreat" | "collect" | "undo" | "transfer";
+export type FriendAction = "deploy" | "shield" | "end-turn" | "next" | "promote" | "rearrange" | "stack-hand" | "stack-field" | "attack" | "convert" | "special" | "castle" | "retreat" | "collect" | "undo" | "transfer" | "drop-field" | "swap-field" | "unstack" | "shield-ability";
 type EnemyUnit = Omit<Unit, "card" | "shields"> & { card?: Card; shields?: { card?: Card; revealed: boolean }[] };
-type FriendBattleView = { completedAttack?: { turn: number; byYou: boolean }; attack?: NonNullable<Game["attackAnimation"]> & { at: number }; recoveredDiscard?: Game["recoveredDiscard"]; recovery?: boolean; ownField?: Field; enemyField?: (EnemyUnit | null)[]; step?: TurnStep; active?: boolean; discardPile?: Card[]; result?: string; outcome?: "victory" | "defeat" | "draw" };
+type FriendBattleView = { spy?: { card: Card; at: number }; doubleAttack?: 1 | 2; jokerExplosion?: NonNullable<Game["jokerExplosion"]> & { at: number }; undoCount?: number; completedAttack?: { turn: number; byYou: boolean }; attack?: NonNullable<Game["attackAnimation"]> & { at: number }; recoveredDiscard?: Game["recoveredDiscard"]; recovery?: boolean; ownField?: Field; enemyField?: (EnemyUnit | null)[]; step?: TurnStep; active?: boolean; discardPile?: Card[]; result?: string; outcome?: "victory" | "defeat" | "draw" };
 type FirstTurn = "flip" | "host" | "guest";
 export type FriendOpeningView = FriendBattleView & { hand: Card[]; opponentCardCount: number; deckCount: number; goesFirst: boolean; opponentName: string; code: string; turn: number; revision: number; canAct: boolean; deployed: Card[]; opponentDeployed: number; shields?: ShieldLayer[][]; opponentShieldCounts?: number[]; ownField?: Field; active?: boolean };
 type Room = {
@@ -26,6 +26,24 @@ export function inviteCode() {
   return /^#friend=([a-f\d]{16})$/i.exec(window.location.hash)?.[1].toUpperCase() ?? "";
 }
 
+const lastRoomKey = "brads-card-game:last-friend-match";
+
+function roomToken(code: string) {
+  const key = "friend-room:" + code;
+  return sessionStorage.getItem(key) ?? localStorage.getItem(key);
+}
+
+function rememberRoom(code: string, token: string, replace = false) {
+  const key = "friend-room:" + code;
+  sessionStorage.setItem(key, token);
+  if (replace || !localStorage.getItem(key)) localStorage.setItem(key, token);
+}
+
+export function resumableFriendCode() {
+  const code = sessionStorage.getItem(lastRoomKey) ?? localStorage.getItem(lastRoomKey) ?? "";
+  return /^[A-F0-9]{16}$/.test(code) && roomToken(code) ? code : "";
+}
+
 async function roomRequest(path: string, options?: RequestInit) {
   const response = await fetch(endpoint + path, options);
   const data = await response.json();
@@ -43,11 +61,13 @@ function matchView(room: Room): FriendOpeningView | undefined {
 }
 
 export async function syncFriendMatch(code: string, move?: { action: FriendAction; index?: number; target?: number; shieldIndex?: number; revision: number }) {
-  const token = sessionStorage.getItem("friend-room:" + code);
+  const token = roomToken(code);
   const headers = { Authorization: "Bearer " + token };
-  return matchView(await roomRequest("/" + code + (move ? "/move" : ""), move ? {
+  const room = await roomRequest("/" + code + (move ? "/move" : ""), move ? {
     method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(move),
-  } : { headers }));
+  } : { headers });
+  if (token) rememberRoom(code, token);
+  return matchView(room);
 }
 
 export default function FriendLobby({ playerName, onMatch }: { playerName: string; onMatch: (opening: FriendOpeningView) => void }) {
@@ -60,11 +80,10 @@ export default function FriendLobby({ playerName, onMatch }: { playerName: strin
   const [message, setMessage] = useState("");
   const activeCode = room?.code ?? code.trim().toUpperCase();
   const validCode = /^[A-F0-9]{16}$/.test(activeCode);
-  const credentialKey = "friend-room:" + activeCode;
 
   useEffect(() => {
     if (!validCode || busy) return;
-    const token = sessionStorage.getItem(credentialKey);
+    const token = roomToken(activeCode);
     if (!token) return;
     const controller = new AbortController();
     async function refresh() {
@@ -72,7 +91,11 @@ export default function FriendLobby({ playerName, onMatch }: { playerName: strin
         const next = await roomRequest("/" + activeCode, {
           headers: { Authorization: "Bearer " + token }, signal: controller.signal,
         });
-        if (!controller.signal.aborted) setRoom(next);
+        if (!controller.signal.aborted) {
+          rememberRoom(activeCode, token);
+          setMessage("");
+          setRoom(next);
+        }
       } catch (error) {
         if (!controller.signal.aborted) setMessage(error instanceof Error ? error.message : "Room unavailable.");
       }
@@ -80,7 +103,7 @@ export default function FriendLobby({ playerName, onMatch }: { playerName: strin
     void refresh();
     const timer = window.setInterval(refresh, 1500);
     return () => { controller.abort(); window.clearInterval(timer); };
-  }, [activeCode, credentialKey, validCode, busy]);
+  }, [activeCode, validCode, busy]);
 
   const [shownFlip, setShownFlip] = useState("");
   const [landedFlip, setLandedFlip] = useState("");
@@ -100,7 +123,11 @@ export default function FriendLobby({ playerName, onMatch }: { playerName: strin
 
   useEffect(() => {
     const opening = room && matchView(room);
-    if (opening && !showingFlip) onMatch(opening);
+    if (opening && !showingFlip) {
+      sessionStorage.setItem(lastRoomKey, opening.code);
+      localStorage.setItem(lastRoomKey, opening.code);
+      onMatch(opening);
+    }
   }, [room, onMatch, showingFlip]);
 
   async function enter(join: boolean) {
@@ -112,7 +139,7 @@ export default function FriendLobby({ playerName, onMatch }: { playerName: strin
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(join ? { name: playerName } : { name: playerName, firstTurn, jokers }),
       });
-      sessionStorage.setItem("friend-room:" + next.code, token);
+      rememberRoom(next.code, token, true);
       const url = new URL(window.location.href);
       url.hash = "friend=" + next.code;
       history.replaceState(null, "", url);
@@ -126,7 +153,7 @@ export default function FriendLobby({ playerName, onMatch }: { playerName: strin
 
   async function saveSettings() {
     if (!room || room.seat !== "host") return;
-    const token = sessionStorage.getItem(credentialKey);
+    const token = roomToken(activeCode);
     if (!token) return;
     setBusy(true);
     setMessage("");
@@ -147,7 +174,7 @@ export default function FriendLobby({ playerName, onMatch }: { playerName: strin
 
   async function startMatch() {
     if (!room?.ready || room.seat !== "host") return;
-    const token = sessionStorage.getItem(credentialKey);
+    const token = roomToken(activeCode);
     if (!token) return;
     setBusy(true);
     setMessage("");
@@ -188,6 +215,8 @@ export default function FriendLobby({ playerName, onMatch }: { playerName: strin
       ) : room ? (
         <>
           <p>{room.ready ? "Both players joined." : "Waiting for your friend to join…"}</p>
+          {!room.ready && room.seat === "host" && <button type="button" disabled={busy}
+            onClick={() => void enter(true)}>Join as Guest in This Tab</button>}
           <p>Host: {room.hostName}{room.guestName && <> · Guest: {room.guestName}</>}</p>
           <p>You are the {room.seat === "host" ? "host" : "guest"}. First turn: {firstTurns[room.settings.firstTurn]}. Jokers: {room.settings.jokers}. Timer off.</p>
           <label>Room code <input readOnly value={room.code} /></label>
