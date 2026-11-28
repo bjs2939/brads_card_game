@@ -56,6 +56,26 @@ test("production room handler shares settings while protecting both seats", asyn
     assert.ok(guestOpening.hand.every(card => !started.opening.hand.some(other => JSON.stringify(card) === JSON.stringify(other))));
     assert.deepEqual((await (await send("POST", start, {}, host.token)).json()).opening, started.opening);
     assert.equal((await send("PATCH", [host.code], setup, host.token)).status, 403);
+    const move = [host.code, "move"];
+    assert.equal((await send("POST", move, { action: "end-turn", revision: 0 }, host.token)).status, 409);
+    const stored = JSON.parse(db.prepare("SELECT opening FROM friend_matches").get().opening);
+    stored.hands.guest[0] = { type: "standard", rank: "6", suit: "hearts" };
+    db.prepare("UPDATE friend_matches SET opening = ?").run(JSON.stringify(stored));
+    const deployed = await send("POST", move, { action: "deploy", index: 0, revision: 0 }, guest.token);
+    assert.equal(deployed.status, 200);
+    assert.deepEqual((await deployed.json()).opening.deployed, [stored.hands.guest[0]]);
+    const opponent = (await (await send("GET", [host.code], undefined, host.token)).json()).opening;
+    assert.equal(opponent.opponentDeployed, 1);
+    assert.deepEqual(opponent.deployed, []);
+    assert.equal((await send("POST", move, { action: "end-turn", revision: 0 }, guest.token)).status, 409);
+    const ended = await send("POST", move, { action: "end-turn", revision: 1 }, guest.token);
+    assert.equal(ended.status, 200);
+    const nextTurn = (await (await send("GET", [host.code], undefined, host.token)).json()).opening;
+    assert.equal(nextTurn.turn, 2);
+    assert.equal(nextTurn.hand.length, 6);
+    assert.equal(nextTurn.deckCount, 42);
+    assert.equal((await send("POST", move, { action: "end-turn", revision: 2 }, host.token)).status, 200);
+    assert.equal((await send("POST", move, { action: "end-turn", revision: 3 }, guest.token)).status, 409);
     db.exec("UPDATE friend_rooms SET expires_at = 0");
     assert.equal((await send("GET", [host.code], undefined, guest.token)).status, 404);
   } finally {

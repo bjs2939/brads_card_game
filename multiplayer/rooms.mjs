@@ -1,4 +1,4 @@
-import { dealFriendOpening, openingForSeat } from "./friend-opening.mjs";
+import { dealFriendOpening, openingForSeat, playFriendOpening } from "./friend-opening.mjs";
 import { randomBytes } from "node:crypto";
 
 const lifetime = 4 * 60 * 60 * 1000;
@@ -43,7 +43,7 @@ export function friendRooms({ now = Date.now } = {}) {
       return reply(201, { ...view(room, "host"), token: room.host });
     }
 
-    const route = /^\/([A-Fa-f0-9]{16})(\/join|\/start)?$/.exec(path);
+    const route = /^\/([A-Fa-f0-9]{16})(\/join|\/start|\/move)?$/.exec(path);
     if (!route) return error(404, "Room not found.");
     const room = rooms.get(route[1].toUpperCase());
     if (!room) return error(404, "This room has expired or does not exist.");
@@ -53,6 +53,14 @@ export function friendRooms({ now = Date.now } = {}) {
       if (!room.guest) return error(409, "Wait for a friend to join.");
       room.opening ??= dealFriendOpening(room.settings);
       return reply(200, view(room, "host"));
+    }
+    if (route[2] === "/move" && method === "POST") {
+      const seat = token === room.host ? "host" : room.guest && token === room.guest ? "guest" : null;
+      if (!seat || !room.opening) return error(403, "Join the match before making a move.");
+      const next = playFriendOpening(room.opening, seat, body.action, body.index, body.revision);
+      if (!next) return error(409, "That move is unavailable. Check the current turn and try again.");
+      room.opening = next;
+      return reply(200, view(room, seat));
     }
     if (route[2] === "/join" && method === "POST") {
       if (room.guest) return error(409, "This room already has two players.");

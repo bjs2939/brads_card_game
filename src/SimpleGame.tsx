@@ -7,7 +7,7 @@ import { sandboxRetreatPlan, saveMatch } from "./playtest";
 import { useCardMotion } from "./useCardMotion";
 import { useAudioForeground, useGameSound, type GameSound } from "./useGameSound";
 import "./SimpleGame.css";
-import { createFullDeck, createTutorialDeck, dealSimpleGame, ranks, shuffleDeck, tutorialDeploymentRanks } from "./game_engine/deck";
+import { canDeploy, createFullDeck, createTutorialDeck, dealSimpleGame, ranks, shuffleDeck, tutorialDeploymentRanks } from "./game_engine/deck";
 import type { Card, Suit } from "./game_engine/types";
 
 export const simpleVersionTitle = "Brad's Card Game";
@@ -122,10 +122,6 @@ type Game = ReturnType<typeof dealSimpleGame> & {
 
 function isNumber(card: Card) {
   return card.type === "standard" && ranks.indexOf(card.rank) <= ranks.indexOf("10");
-}
-
-function canDeploy(card: Card) {
-  return card.type === "joker" || isNumber(card);
 }
 
 function isJack(card: Card): card is Extract<Card, { type: "standard" }> {
@@ -1415,6 +1411,9 @@ function BattlefieldRow({ units, label, rank, opponent = false, selected, onPick
       onPointerCancel={finishTouchDrag}
       onLostPointerCapture={finishTouchDrag}
       onClickCapture={event => {
+        if (friendOpening && !(event.target instanceof Element && event.target.closest(".player-hand-row button, .simple-game-end-turn, .match-footer-home"))) {
+          event.preventDefault(); event.stopPropagation(); return;
+        }
         if (!suppressTouchClick.current || event.detail === 0) return;
         suppressTouchClick.current = false;
         event.stopPropagation();
@@ -1648,12 +1647,13 @@ function describeMatchActions(previous: Game, current: Game): string[] {
   return lines;
 }
 
-export default function SimpleGame({ difficulty, trainingGrounds = false, tutorial = false, tutorialAudio = null, friendOpening, onBack, music, onResultChange, onGarbageMusicChange }: {
+export default function SimpleGame({ difficulty, trainingGrounds = false, tutorial = false, tutorialAudio = null, friendOpening, onFriendMove, onBack, music, onResultChange, onGarbageMusicChange }: {
   difficulty: Difficulty;
   trainingGrounds?: boolean;
   tutorial?: boolean;
   tutorialAudio?: AudioContext | null;
   friendOpening?: FriendOpeningView;
+  onFriendMove?: (action: "deploy" | "end-turn", index?: number) => Promise<void>;
   onBack: () => void;
   music: { enabled: boolean; toggle: () => void; setDucked: (ducked: boolean) => void };
   onResultChange: (visible: boolean) => void;
@@ -1663,6 +1663,34 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     player: friendOpening.hand, computer: new Array<Card>(friendOpening.opponentCardCount),
     drawPile: new Array<Card>(friendOpening.deckCount),
   }) : startGame(tutorial));
+  const [friendBusy, setFriendBusy] = useState(false);
+  const [friendError, setFriendError] = useState("");
+  const friendCanAct = !!friendOpening?.canAct && !friendBusy;
+
+  useEffect(() => {
+    if (!friendOpening) return;
+    const hiddenCard: Card = { type: "joker", color: "black" };
+    setGame(current => ({
+      ...current,
+      player: friendOpening.hand,
+      computer: new Array<Card>(friendOpening.opponentCardCount),
+      drawPile: new Array<Card>(friendOpening.deckCount),
+      phase: friendOpening.canAct ? "player" : "computer",
+      turn: friendOpening.turn,
+      playerField: [null, null, null, ...friendOpening.deployed.map(deploy)],
+      computerField: [null, null, null, ...Array.from({ length: friendOpening.opponentDeployed }, () => deploy(hiddenCard))],
+    }));
+  }, [friendOpening]);
+
+  async function sendFriendMove(action: "deploy" | "end-turn", index?: number) {
+    if (!friendCanAct || !onFriendMove) return;
+    setFriendBusy(true);
+    setFriendError("");
+    try { await onFriendMove(action, index); }
+    catch (error) { setFriendError(error instanceof Error ? error.message : "Could not send the move."); }
+    finally { setFriendBusy(false); }
+  }
+
   const needsGameSetup = !tutorial && !trainingGrounds && !friendOpening;
   const [setupPending, setSetupPending] = useState(needsGameSetup);
   const [firstTurn, setFirstTurn] = useState<Side | "flip">("flip");
@@ -2195,7 +2223,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   const canToggleHandStack = compactBoard && canDeployFromHand && canStackFromHand &&
     game.player.some(card => hasHandStack(game.playerField, card));
   const choosingHandStack = canToggleHandStack && stackFromHand;
-  const canEndTurn = !tutorialGuided && !tutorialRank && !isComputer && game.step !== "draw" && !game.pendingAttack && !warningActive && !showingCombatEffect;
+  const canEndTurn = friendOpening ? friendCanAct : !tutorialGuided && !tutorialRank && !isComputer && game.step !== "draw" && !game.pendingAttack && !warningActive && !showingCombatEffect;
   const pendingTarget = game.pendingAttack && game.computerField[game.pendingAttack.target];
   const pendingPower = pendingTarget && game.pendingAttack?.isStack
     ? calculateAttack(game.playerField, game.pendingAttack.attacker,
@@ -2662,6 +2690,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
 
   function endTurn() {
     if (!canEndTurn) return;
+    if (friendOpening) { void sendFriendMove("end-turn"); return; }
     setGame(finishPlayerTurn);
   }
 
@@ -3287,7 +3316,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
     return "Select a front-rank number card or an Ace or King from your hand.";
   }
 
-  const turnMessage = getTurnMessage();
+  const turnMessage = friendOpening ? (friendOpening.turn > 2 ? "Opening turns complete. Combat is still in development." : friendOpening.canAct ? "Click a troop in your hand to deploy it to the back rank, then end your turn." : "Waiting for your friend to end their turn.") : getTurnMessage();
   const lightningBolt = (
     <img
       className="special-strike-bolt"
@@ -3374,7 +3403,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   ));
 
   function canDragHandCard(card: Card) {
-    return !isShield(card) && canStackFromHand && hasStackTarget(card);
+    return !friendOpening && !isShield(card) && canStackFromHand && hasStackTarget(card);
   }
 
   function canUseHandCard(card: Card) {
@@ -3401,15 +3430,18 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
   return (
     <>
     {friendOpening && <header className="friend-battlefield-status">
-      <p><strong>{friendOpening.goesFirst ? "You go first." : friendOpening.opponentName + " goes first."}</strong> Battlefield preview. Turns and combat are coming next.</p>
+      <p role="status">{friendError || turnMessage}</p>
       <button type="button" className="playtest-button" onClick={onBack}>Back to Home</button>
     </header>}
     <main ref={board} className="simple-game-table" data-paused={paused && !friendOpening}
-      {...(friendOpening ? { inert: "" } : {})}
+
       onPointerMove={moveShieldDrag} onPointerUp={finishShieldDrag}
       onPointerCancel={finishShieldDrag} onLostPointerCapture={finishShieldDrag}
       onPointerDownCapture={() => { suppressShieldClick.current = false; }}
       onClickCapture={event => {
+        if (friendOpening && !(event.target instanceof Element && event.target.closest(".player-hand-row button, .simple-game-end-turn, .match-footer-home"))) {
+          event.preventDefault(); event.stopPropagation(); return;
+        }
         if (suppressShieldClick.current && event.detail !== 0) {
           suppressShieldClick.current = false;
           event.stopPropagation();
@@ -4060,7 +4092,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
           <button
             key={cardKey(card)}
             data-card-position={`player-${index}`}
-            disabled={(tutorialOpening || tutorialGuided) && !canUseHandCard(card)}
+            disabled={friendOpening ? !friendCanAct || !canDeploy(card) || friendOpening.deployed.length >= 3 : (tutorialOpening || tutorialGuided) && !canUseHandCard(card)}
             data-hand-shield-drag={isShield(card) && canChooseShield && !paused && !warningActive || undefined}
             onPointerDown={event => {
               if (isShield(card) && canChooseShield && !paused && !warningActive) beginShieldDrag(event, card);
@@ -4082,6 +4114,7 @@ export default function SimpleGame({ difficulty, trainingGrounds = false, tutori
             ].filter(Boolean).join(" ")}
             onClick={() => {
               inspect(card);
+              if (friendOpening) { void sendFriendMove("deploy", index); return; }
               if (!canUseHandCard(card)) return;
               if (choosingHandStack) {
                 if (hasStackTarget(card)) {

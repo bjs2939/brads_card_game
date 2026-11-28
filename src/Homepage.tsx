@@ -4,7 +4,7 @@ import CardFace from "./CardFace";
 import { Feedback, MatchHistory, gameVersion } from "./PlaytestPanels";
 import SimpleGame, { difficulties, simpleVersionTitle, type Difficulty } from "./SimpleGame";
 import { useBackgroundMusic } from "./useGameSound";
-import FriendLobby, { inviteCode, type FriendOpeningView } from "./FriendLobby";
+import FriendLobby, { inviteCode, syncFriendMatch, type FriendOpeningView } from "./FriendLobby";
 import "./Homepage.css";
 
 const difficultyDescriptions: Record<Difficulty, string> = {
@@ -49,6 +49,28 @@ export default function HomePage() {
     }
     return () => controller.abort();
   }, []);
+
+  const friendCode = friendOpening?.code;
+  useEffect(() => {
+    if (!friendCode) return;
+    let active = true;
+    const poll = async () => {
+      try {
+        const state = await syncFriendMatch(friendCode);
+        if (active && state) setFriendOpening(current => current?.code === friendCode && state.revision > current.revision ? state : current);
+      } catch {
+        // A transient failure can recover on the next poll.
+      }
+    };
+    const timer = window.setInterval(poll, 1500);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [friendCode]);
+
+  async function moveFriend(action: "deploy" | "end-turn", index?: number) {
+    if (!friendOpening) return;
+    const state = await syncFriendMatch(friendOpening.code, { action, index, revision: friendOpening.revision });
+    if (state) setFriendOpening(current => current?.code === state.code && state.revision > current.revision ? state : current);
+  }
 
   function stopTutorialAudio() {
     const audio = tutorialAudio.current;
@@ -95,7 +117,7 @@ export default function HomePage() {
   }
 
   if (friendOpening) {
-    return <SimpleGame difficulty="Normal" friendOpening={friendOpening} music={music}
+    return <SimpleGame difficulty="Normal" friendOpening={friendOpening} onFriendMove={moveFriend} music={music}
       onResultChange={setShowingResult} onGarbageMusicChange={setGarbageMusic}
       onBack={() => setFriendOpening(undefined)} />;
   }

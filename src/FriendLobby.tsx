@@ -2,12 +2,12 @@ import { useEffect, useState } from "react";
 import type { Card } from "./game_engine/types";
 
 type FirstTurn = "flip" | "host" | "guest";
-export type FriendOpeningView = { hand: Card[]; opponentCardCount: number; deckCount: number; goesFirst: boolean; opponentName: string };
+export type FriendOpeningView = { hand: Card[]; opponentCardCount: number; deckCount: number; goesFirst: boolean; opponentName: string; code: string; turn: number; revision: number; canAct: boolean; deployed: Card[]; opponentDeployed: number };
 type Room = {
   code: string;
   seat: "host" | "guest";
   ready: boolean;
-  opening?: { firstSeat: "host" | "guest"; hand: Card[]; opponentCardCount: number; deckCount: number };
+  opening?: { firstSeat: "host" | "guest"; hand: Card[]; opponentCardCount: number; deckCount: number; turn: number; revision: number; deployed: Card[]; opponentDeployed: number };
   hostName: string;
   guestName?: string;
   settings: { firstTurn: FirstTurn; jokers: number; timer: boolean };
@@ -25,6 +25,23 @@ async function roomRequest(path: string, options?: RequestInit) {
   const data = await response.json();
   if (!response.ok) throw new Error(data.error);
   return data;
+}
+
+function matchView(room: Room): FriendOpeningView | undefined {
+  if (!room.opening) return;
+  const { firstSeat, ...opening } = room.opening;
+  const goesFirst = firstSeat === room.seat;
+  return { ...opening, code: room.code, goesFirst,
+    canAct: opening.turn === (goesFirst ? 1 : 2),
+    opponentName: (room.seat === "host" ? room.guestName : room.hostName) ?? "Opponent" };
+}
+
+export async function syncFriendMatch(code: string, move?: { action: "deploy" | "end-turn"; index?: number; revision: number }) {
+  const token = sessionStorage.getItem("friend-room:" + code);
+  const headers = { Authorization: "Bearer " + token };
+  return matchView(await roomRequest("/" + code + (move ? "/move" : ""), move ? {
+    method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(move),
+  } : { headers }));
 }
 
 export default function FriendLobby({ playerName, onMatch }: { playerName: string; onMatch: (opening: FriendOpeningView) => void }) {
@@ -60,10 +77,8 @@ export default function FriendLobby({ playerName, onMatch }: { playerName: strin
   }, [activeCode, credentialKey, validCode, busy]);
 
   useEffect(() => {
-    if (!room?.opening) return;
-    const { hand, deckCount, opponentCardCount, firstSeat } = room.opening;
-    onMatch({ hand, deckCount, opponentCardCount, goesFirst: firstSeat === room.seat,
-      opponentName: (room.seat === "host" ? room.guestName : room.hostName) ?? "Opponent" });
+    const opening = room && matchView(room);
+    if (opening) onMatch(opening);
   }, [room, onMatch]);
 
   async function enter(join: boolean) {

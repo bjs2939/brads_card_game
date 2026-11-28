@@ -1,4 +1,4 @@
-import { dealFriendOpening, openingForSeat } from "../../../multiplayer/friend-opening.mjs";
+import { dealFriendOpening, openingForSeat, playFriendOpening } from "../../../multiplayer/friend-opening.mjs";
 
 const headers = { "Cache-Control": "no-store" };
 const reply = (status, data) => Response.json(data, { status, headers });
@@ -71,7 +71,7 @@ export async function onRequest({ request, env, params }) {
       return room ? reply(201, { ...view(room, "host"), token: host }) : error(503, "Room capacity reached.");
     }
 
-    const route = /^([A-Fa-f0-9]{16})(\/join|\/start)?$/.exec(path);
+    const route = /^([A-Fa-f0-9]{16})(\/join|\/start|\/move)?$/.exec(path);
     if (!route) return error(404, "Room not found.");
     const code = route[1].toUpperCase();
     if (route[2] === "/start" && method === "POST") {
@@ -85,6 +85,19 @@ export async function onRequest({ request, env, params }) {
       ).bind(opening, code, now, room.first_turn, room.jokers).run();
       const started = await db.prepare("SELECT opening FROM friend_matches WHERE room_code = ?").bind(code).first();
       return started ? reply(200, view({ ...room, ...started }, "host")) : error(409, "Room settings changed. Try again.");
+    }
+    if (route[2] === "/move" && method === "POST") {
+      const room = await db.prepare(
+        "SELECT friend_rooms.*, friend_matches.opening FROM friend_rooms JOIN friend_matches ON room_code = code WHERE code = ? AND expires_at > ? AND (host_token = ? OR guest_token = ?)",
+      ).bind(code, now, token, token).first();
+      if (!room) return error(403, "Join the match before making a move.");
+      const seat = token === room.host_token ? "host" : "guest";
+      const next = playFriendOpening(JSON.parse(room.opening), seat, body.action, body.index, body.revision);
+      if (!next) return error(409, "That move is unavailable. Check the current turn and try again.");
+      const opening = JSON.stringify(next);
+      const saved = await db.prepare("UPDATE friend_matches SET opening = ? WHERE room_code = ? AND opening = ? RETURNING opening")
+        .bind(opening, code, room.opening).first();
+      return saved ? reply(200, view({ ...room, ...saved }, seat)) : error(409, "The board changed. Try again.");
     }
     if (route[2] === "/join" && method === "POST") {
       if (!nameValid) return error(400, "Enter a player name of 1 to 24 characters.");

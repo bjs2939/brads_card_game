@@ -3,6 +3,10 @@ import type { Card, Rank, Suit } from "./types";
 export type StandardCard = Extract<Card, { type: "standard" }>;
 
 export const ranks: Rank[] = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"];
+export function canDeploy(card: Card): boolean {
+  return card.type === "joker" || ranks.indexOf(card.rank) <= ranks.indexOf("10");
+}
+
 const suits: Suit[] = ["hearts", "diamonds", "clubs", "spades"];
 
 export function createStandardDeck(): StandardCard[] {
